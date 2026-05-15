@@ -1,0 +1,20 @@
+{
+  "name": "Vis Ontvangst Registratie",
+  "short_name": "Vis Ontvangst",
+  "description": "Registreer visontvangst per pallet met gewichten, vissoort, kwaliteit en foto.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b4f6c",
+  "theme_color": "#0b4f6c",
+  "lang": "nl",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

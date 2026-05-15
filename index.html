@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b4f6c" />
+<title>Vis Ontvangst Registratie</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Vis Ontvangst" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🐟</span>
+    <h1>Vis Ontvangst</h1>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-view="form" role="tab">Nieuwe ontvangst</button>
+    <button class="tab" data-view="history" role="tab">Historie</button>
+    <button class="tab" data-view="settings" role="tab">Instellingen</button>
+  </nav>
+</header>
+
+<main>
+  <!-- FORM VIEW -->
+  <section id="view-form" class="view active">
+    <div class="card meta-card">
+      <div class="row">
+        <label class="field">
+          <span>Datum &amp; tijd</span>
+          <input type="datetime-local" id="receiptDateTime" />
+        </label>
+        <label class="field">
+          <span>Leverancier</span>
+          <select id="supplier"></select>
+        </label>
+      </div>
+    </div>
+
+    <div id="pallets" class="pallets"></div>
+
+    <div class="actions sticky">
+      <button class="btn secondary" id="addPalletBtn">+ Pallet toevoegen</button>
+      <div class="total-summary">
+        <div><span>Pallets:</span> <strong id="totalPallets">0</strong></div>
+        <div><span>Netto totaal:</span> <strong id="totalNet">0,00</strong> kg</div>
+      </div>
+      <button class="btn primary" id="saveReceiptBtn">Ontvangst opslaan</button>
+    </div>
+  </section>
+
+  <!-- HISTORY VIEW -->
+  <section id="view-history" class="view">
+    <div class="card">
+      <div class="row">
+        <label class="field grow">
+          <span>Zoeken</span>
+          <input type="text" id="historySearch" placeholder="Vissoort, leverancier, notitie..." />
+        </label>
+        <button class="btn secondary" id="exportCsvBtn">Exporteer CSV</button>
+      </div>
+    </div>
+    <div id="historyList" class="history-list"></div>
+  </section>
+
+  <!-- SETTINGS VIEW -->
+  <section id="view-settings" class="view">
+    <div class="card">
+      <h2>Standaardwaarden</h2>
+      <label class="field">
+        <span>Standaard gewicht lege bak (kg)</span>
+        <input type="number" id="defaultCrateWeight" step="0.01" min="0" />
+      </label>
+      <label class="field">
+        <span>Standaard aantal bakken per pallet</span>
+        <input type="number" id="defaultCrateCount" step="1" min="0" />
+      </label>
+      <label class="field">
+        <span>Standaard gewicht lege pallet (kg)</span>
+        <input type="number" id="defaultPalletWeight" step="0.1" min="0" />
+      </label>
+      <label class="field">
+        <span>Standaard ijs percentage (%)</span>
+        <input type="number" id="defaultIcePercent" step="0.1" min="0" max="100" />
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>Vissoorten</h2>
+      <div id="speciesList" class="chips"></div>
+      <div class="row">
+        <input type="text" id="newSpecies" placeholder="Nieuwe vissoort..." />
+        <button class="btn secondary" id="addSpeciesBtn">Toevoegen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Leveranciers</h2>
+      <div id="suppliersList" class="chips"></div>
+      <div class="row">
+        <input type="text" id="newSupplier" placeholder="Nieuwe leverancier..." />
+        <button class="btn secondary" id="addSupplierBtn">Toevoegen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Sizes</h2>
+      <div id="sizesList" class="chips"></div>
+      <div class="row">
+        <input type="text" id="newSize" placeholder="Nieuwe size (bv. 2, M, 3/4)..." />
+        <button class="btn secondary" id="addSizeBtn">Toevoegen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Google Sheets sync</h2>
+      <label class="field">
+        <span>Webhook URL (Apps Script Web App)</span>
+        <input type="url" id="sheetWebhookUrl" placeholder="https://script.google.com/macros/s/.../exec" />
+      </label>
+      <label class="field" style="flex-direction:row;align-items:center;gap:.5rem">
+        <input type="checkbox" id="sheetIncludePhoto" style="width:auto;margin:0" />
+        <span style="margin:0">Foto's meesturen (data-URL, vergroot het bestand)</span>
+      </label>
+      <div class="row">
+        <button class="btn secondary" id="testWebhookBtn">Test verbinding</button>
+        <button class="btn primary" id="flushQueueBtn">Sync wachtrij nu <span id="syncBadge" class="sync-badge hidden">0</span></button>
+      </div>
+      <p style="font-size:.85rem;color:var(--text-muted);margin:.5rem 0 0">
+        Bij elke opgeslagen ontvangst wordt automatisch een rij per pallet toegevoegd aan de Google Sheet.
+        Bij geen verbinding worden records in een lokale wachtrij gezet en bij de volgende sync verstuurd.
+      </p>
+    </div>
+
+    <div class="card danger-zone">
+      <h2>Data</h2>
+      <button class="btn secondary" id="exportAllBtn">Exporteer alles (JSON)</button>
+      <button class="btn danger" id="clearAllBtn">Alles verwijderen</button>
+    </div>
+  </section>
+</main>
+
+<!-- Detail modal -->
+<div id="detailModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <header>
+      <h2 id="detailTitle">Ontvangst details</h2>
+      <button class="icon-btn" id="closeDetailBtn" aria-label="Sluiten">✕</button>
+    </header>
+    <div id="detailBody" class="modal-body"></div>
+  </div>
+</div>
+
+<!-- Photo viewer -->
+<div id="photoModal" class="modal hidden" role="dialog" aria-modal="true">
+  <button class="icon-btn close-photo" id="closePhotoBtn" aria-label="Sluiten">✕</button>
+  <img id="photoFull" alt="Pallet foto" />
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- Pallet template -->
+<template id="palletTemplate">
+  <div class="pallet card" data-pallet-id="">
+    <header class="pallet-header">
+      <h3>Pallet <span class="pallet-index">1</span></h3>
+      <button class="icon-btn remove-pallet" aria-label="Verwijder pallet">🗑</button>
+    </header>
+
+    <div class="grid">
+      <label class="field">
+        <span>Aantal bakken</span>
+        <input type="number" class="crateCount" min="0" step="1" inputmode="numeric" />
+      </label>
+      <label class="field">
+        <span>Gewicht lege bak (kg)</span>
+        <input type="number" class="crateWeight" min="0" step="0.01" inputmode="decimal" />
+      </label>
+      <label class="field">
+        <span>Gewicht lege pallet (kg)</span>
+        <input type="number" class="palletWeight" min="0" step="0.01" inputmode="decimal" />
+      </label>
+      <label class="field">
+        <span>Brutogewicht (kg)</span>
+        <input type="number" class="grossWeight" min="0" step="0.01" inputmode="decimal" placeholder="Vanaf weegschaal" />
+      </label>
+      <label class="field">
+        <span>IJs (%)</span>
+        <input type="number" class="icePercent" min="0" max="100" step="0.1" inputmode="decimal" placeholder="bv. 10" />
+      </label>
+      <label class="field">
+        <span>Netto bruto (kg)</span>
+        <input type="text" class="netGross" readonly title="Brutogewicht − tarra (bakken)" />
+      </label>
+      <label class="field highlight">
+        <span>Nettogewicht vis (kg)</span>
+        <input type="text" class="netWeight" readonly title="Na aftrek van ijs" />
+      </label>
+
+      <label class="field">
+        <span>Vissoort</span>
+        <select class="species"></select>
+      </label>
+
+      <label class="field">
+        <span>Size</span>
+        <select class="size"></select>
+      </label>
+
+      <label class="field">
+        <span>Temperatuur (°C)</span>
+        <input type="number" class="temperature" step="0.1" inputmode="decimal" placeholder="bv. 2,0" />
+      </label>
+    </div>
+
+    <div class="field">
+      <span>Kwaliteitsklasse</span>
+      <div class="quality-buttons" role="radiogroup" aria-label="Kwaliteitsklasse">
+        <button type="button" class="quality-btn" data-q="A">A</button>
+        <button type="button" class="quality-btn" data-q="B">B</button>
+        <button type="button" class="quality-btn" data-q="C">C</button>
+        <button type="button" class="quality-btn" data-q="D">D</button>
+      </div>
+    </div>
+
+    <label class="field">
+      <span>Foto pallet + weegschaal</span>
+      <div class="photo-row">
+        <input type="file" class="photoInput" accept="image/*" capture="environment" />
+        <div class="photo-preview empty">Geen foto</div>
+      </div>
+    </label>
+
+    <label class="field">
+      <span>Notities (optioneel)</span>
+      <textarea class="notes" rows="2" placeholder="Opmerkingen..."></textarea>
+    </label>
+  </div>
+</template>
+
+<script src="app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed:', err));
+    });
+  }
+</script>
+</body>
+</html>
