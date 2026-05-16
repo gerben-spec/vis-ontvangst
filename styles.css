@@ -560,3 +560,10 @@ main {
   text-align: center;
 }
 .sync-badge.hidden { display: none; }
+
+.req {
+  color: var(--danger);
+  font-style: normal;
+  font-weight: 700;
+  margin-left: 0.15rem;
+}

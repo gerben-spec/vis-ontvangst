@@ -74,6 +74,7 @@
       receiptId: receipt.id,
       dateTime: receipt.dateTime,
       supplier: receipt.supplier || '',
+      deliveryNumber: receipt.deliveryNumber || '',
       createdAt: receipt.createdAt,
       pallets: receipt.pallets.map((p, i) => ({
         palletIndex: i + 1,
@@ -410,6 +411,12 @@
       size: $('.size', n).value,
       quality,
       temperature: $('.temperature', n).value === '' ? null : parseFloat($('.temperature', n).value),
+      temperatureRaw: $('.temperature', n).value,
+      crateWeightRaw: $('.crateWeight', n).value,
+      palletWeightRaw: $('.palletWeight', n).value,
+      grossWeightRaw: $('.grossWeight', n).value,
+      crateCountRaw: $('.crateCount', n).value,
+      icePercentRaw: $('.icePercent', n).value,
       notes: $('.notes', n).value.trim(),
       photo: p.state.photo,
     };
@@ -430,25 +437,47 @@
     if (palletsData.length === 0) return 'Voeg minstens één pallet toe.';
     for (let i = 0; i < palletsData.length; i++) {
       const p = palletsData[i];
-      if (!p.species) return `Pallet ${i + 1}: kies een vissoort.`;
-      if (!p.quality) return `Pallet ${i + 1}: kies een kwaliteitsklasse.`;
-      if (!p.grossWeight || p.grossWeight <= 0) return `Pallet ${i + 1}: vul brutogewicht in.`;
-      if (p.crateCount <= 0) return `Pallet ${i + 1}: vul aantal bakken in.`;
-      if (p.netWeight <= 0) return `Pallet ${i + 1}: nettogewicht moet groter dan 0 zijn.`;
+      const tag = `Pallet ${i + 1}`;
+      if (p.crateCountRaw === '' || p.crateCount <= 0) return `${tag}: vul aantal bakken in.`;
+      if (p.crateWeightRaw === '') return `${tag}: vul gewicht lege bak in.`;
+      if (p.palletWeightRaw === '') return `${tag}: vul gewicht lege pallet in.`;
+      if (p.grossWeightRaw === '' || p.grossWeight <= 0) return `${tag}: vul brutogewicht in.`;
+      if (p.icePercentRaw === '') return `${tag}: vul ijs percentage in (0 als geen ijs).`;
+      if (!p.species) return `${tag}: kies een vissoort.`;
+      if (!p.size) return `${tag}: kies een size.`;
+      if (p.temperatureRaw === '' || p.temperature === null) return `${tag}: vul temperatuur in.`;
+      if (!p.quality) return `${tag}: kies een kwaliteitsklasse.`;
+      if (!p.photo) return `${tag}: voeg een foto toe.`;
+      if (p.netWeight <= 0) return `${tag}: nettogewicht moet groter dan 0 zijn.`;
     }
     return null;
   }
 
+  function validateMeta() {
+    if (!$('#receiptDateTime').value) return 'Vul datum en tijd in.';
+    if (!$('#supplier').value) return 'Kies een leverancier.';
+    if (!$('#deliveryNumber').value.trim()) return 'Vul het leveringsnummer in.';
+    return null;
+  }
+
   function saveCurrentReceipt() {
+    const metaErr = validateMeta();
+    if (metaErr) { toast(metaErr, 'error'); return; }
     const palletsData = pallets.map(readPalletFromNode);
     const err = validatePallets(palletsData);
     if (err) { toast(err, 'error'); return; }
+
+    const cleanedPallets = palletsData.map(p => {
+      const { temperatureRaw, crateWeightRaw, palletWeightRaw, grossWeightRaw, crateCountRaw, icePercentRaw, ...rest } = p;
+      return rest;
+    });
 
     const receipt = {
       id: 'r' + Date.now().toString(36),
       dateTime: $('#receiptDateTime').value || nowLocalIso(),
       supplier: $('#supplier').value,
-      pallets: palletsData,
+      deliveryNumber: $('#deliveryNumber').value.trim(),
+      pallets: cleanedPallets,
       createdAt: new Date().toISOString(),
     };
 
@@ -472,6 +501,7 @@
     pallets = [];
     $('#pallets').innerHTML = '';
     populateSupplierSelect('');
+    $('#deliveryNumber').value = '';
     $('#receiptDateTime').value = nowLocalIso();
     addPallet();
     updateTotals();
@@ -485,6 +515,7 @@
       if (!search) return true;
       const hay = [
         r.supplier,
+        r.deliveryNumber,
         ...r.pallets.flatMap(p => [p.species, p.size, p.notes, p.quality]),
       ].join(' ').toLowerCase();
       return hay.includes(search);
@@ -503,7 +534,7 @@
       item.className = 'history-item';
       item.innerHTML = `
         <div class="meta">
-          <div class="date">${fmtDateTime(r.dateTime)}</div>
+          <div class="date">${fmtDateTime(r.dateTime)}${r.deliveryNumber ? ' • #' + escapeHtml(r.deliveryNumber) : ''}</div>
           <div class="info">${r.supplier ? escapeHtml(r.supplier) + ' • ' : ''}${escapeHtml(speciesList)}</div>
         </div>
         <div class="totals">
@@ -531,6 +562,7 @@
     body.innerHTML = `
       <div style="margin-bottom:1rem">
         ${receipt.supplier ? `<div><span style="color:var(--text-muted)">Leverancier:</span> <strong>${escapeHtml(receipt.supplier)}</strong></div>` : ''}
+        ${receipt.deliveryNumber ? `<div><span style="color:var(--text-muted)">Leveringsnummer:</span> <strong>${escapeHtml(receipt.deliveryNumber)}</strong></div>` : ''}
         <div><span style="color:var(--text-muted)">Totaal netto:</span> <strong>${fmtNum(totalNet)} kg</strong> (${receipt.pallets.length} pallets)</div>
       </div>
       ${receipt.pallets.map((p, i) => `
@@ -634,7 +666,7 @@
     const receipts = loadReceipts();
     if (receipts.length === 0) { toast('Geen data om te exporteren', 'error'); return; }
     const header = [
-      'Ontvangst ID', 'Datum/tijd', 'Leverancier', 'Pallet', 'Vissoort', 'Size',
+      'Ontvangst ID', 'Datum/tijd', 'Leverancier', 'Leveringsnummer', 'Pallet', 'Vissoort', 'Size',
       'Kwaliteit', 'Aantal bakken', 'Gewicht lege bak (kg)', 'Gewicht lege pallet (kg)',
       'Bruto (kg)', 'Netto bruto (kg)', 'IJs (%)', 'IJs aftrek (kg)', 'Netto vis (kg)',
       'Temperatuur (°C)', 'Notitie'
@@ -646,6 +678,7 @@
           r.id,
           fmtDateTime(r.dateTime),
           r.supplier || '',
+          r.deliveryNumber || '',
           i + 1,
           p.species,
           p.size || '',
@@ -721,7 +754,7 @@
       settings.defaultIcePercent = v;
       saveSettings();
     });
-    $('#sheetWebhookUrl').addEventListener('change', e => {
+    $('#sheetWebhookUrl').addEventListener('input', e => {
       settings.sheetWebhookUrl = e.target.value.trim();
       saveSettings();
     });

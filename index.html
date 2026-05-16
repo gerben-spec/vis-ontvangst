@@ -33,12 +33,16 @@
     <div class="card meta-card">
       <div class="row">
         <label class="field">
-          <span>Datum &amp; tijd</span>
+          <span>Datum &amp; tijd <em class="req">*</em></span>
           <input type="datetime-local" id="receiptDateTime" />
         </label>
         <label class="field">
-          <span>Leverancier</span>
+          <span>Leverancier <em class="req">*</em></span>
           <select id="supplier"></select>
+        </label>
+        <label class="field">
+          <span>Leveringsnummer <em class="req">*</em></span>
+          <input type="text" id="deliveryNumber" placeholder="bv. 2026-0142" />
         </label>
       </div>
     </div>
@@ -176,23 +180,23 @@
 
     <div class="grid">
       <label class="field">
-        <span>Aantal bakken</span>
+        <span>Aantal bakken <em class="req">*</em></span>
         <input type="number" class="crateCount" min="0" step="1" inputmode="numeric" />
       </label>
       <label class="field">
-        <span>Gewicht lege bak (kg)</span>
+        <span>Gewicht lege bak (kg) <em class="req">*</em></span>
         <input type="number" class="crateWeight" min="0" step="0.01" inputmode="decimal" />
       </label>
       <label class="field">
-        <span>Gewicht lege pallet (kg)</span>
+        <span>Gewicht lege pallet (kg) <em class="req">*</em></span>
         <input type="number" class="palletWeight" min="0" step="0.01" inputmode="decimal" />
       </label>
       <label class="field">
-        <span>Brutogewicht (kg)</span>
+        <span>Brutogewicht (kg) <em class="req">*</em></span>
         <input type="number" class="grossWeight" min="0" step="0.01" inputmode="decimal" placeholder="Vanaf weegschaal" />
       </label>
       <label class="field">
-        <span>IJs (%)</span>
+        <span>IJs (%) <em class="req">*</em></span>
         <input type="number" class="icePercent" min="0" max="100" step="0.1" inputmode="decimal" placeholder="bv. 10" />
       </label>
       <label class="field">
@@ -205,23 +209,23 @@
       </label>
 
       <label class="field">
-        <span>Vissoort</span>
+        <span>Vissoort <em class="req">*</em></span>
         <select class="species"></select>
       </label>
 
       <label class="field">
-        <span>Size</span>
+        <span>Size <em class="req">*</em></span>
         <select class="size"></select>
       </label>
 
       <label class="field">
-        <span>Temperatuur (°C)</span>
+        <span>Temperatuur (°C) <em class="req">*</em></span>
         <input type="number" class="temperature" step="0.1" inputmode="decimal" placeholder="bv. 2,0" />
       </label>
     </div>
 
     <div class="field">
-      <span>Kwaliteitsklasse</span>
+      <span>Kwaliteitsklasse <em class="req">*</em></span>
       <div class="quality-buttons" role="radiogroup" aria-label="Kwaliteitsklasse">
         <button type="button" class="quality-btn" data-q="A">A</button>
         <button type="button" class="quality-btn" data-q="B">B</button>
@@ -231,7 +235,7 @@
     </div>
 
     <label class="field">
-      <span>Foto pallet + weegschaal</span>
+      <span>Foto pallet + weegschaal <em class="req">*</em></span>
       <div class="photo-row">
         <input type="file" class="photoInput" accept="image/*" capture="environment" />
         <div class="photo-preview empty">Geen foto</div>
