@@ -111,6 +111,9 @@
         <input type="text" id="newSupplier" placeholder="Nieuwe leverancier..." />
         <button class="btn secondary" id="addSupplierBtn">Toevoegen</button>
       </div>
+      <div class="row">
+        <button class="btn secondary" id="importDefaultSuppliersBtn">Standaardlijst toevoegen</button>
+      </div>
     </div>
 
     <div class="card">
@@ -169,6 +172,9 @@
 
 <!-- Toast -->
 <div id="toast" class="toast hidden"></div>
+
+<!-- Print area (alleen zichtbaar bij print) -->
+<div id="printArea" aria-hidden="true"></div>
 
 <!-- Pallet template -->
 <template id="palletTemplate">
@@ -235,7 +241,7 @@
     </div>
 
     <label class="field">
-      <span>Foto pallet + weegschaal <em class="req">*</em></span>
+      <span>Foto pallet + weegschaal (optioneel)</span>
       <div class="photo-row">
         <input type="file" class="photoInput" accept="image/*" capture="environment" />
         <div class="photo-preview empty">Geen foto</div>
