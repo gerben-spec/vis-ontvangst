@@ -971,10 +971,10 @@
           <tr>
             <th>Vissoort</th>
             <th>Size</th>
-            <th>Kwaliteit</th>
+            <th>Kw</th>
             <th class="num">Bakken</th>
-            <th class="num">Netto vis (kg)</th>
-            <th class="num">Temp (°C)</th>
+            <th class="num">Kg</th>
+            <th class="num">°C</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
