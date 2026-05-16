@@ -8,13 +8,63 @@
     syncQueue: 'vor.syncQueue',
   };
 
+  const DEFAULT_SUPPLIERS = [
+    'MARISA26',
+    'JONATHAN ALLI26',
+    'VAYU26',
+    'SSC26',
+    'SERGIO 26',
+    'ANSU26',
+    'TANDOR26',
+    'ANNEGRE26',
+    'VIERGEBROEDERS26',
+    'PETRA26',
+  ];
+
+  const DEFAULT_SPECIES = [
+    '1-KANDRA',
+    '2-LANE SNAPPER',
+    '4-BOTERVIS',
+    '5-CROAKER',
+    '7-BARRACUDA',
+    '8-MAKREEL',
+    '9-POJO',
+    '10-YARABAKKA',
+    '11-RIEMVIS',
+    '13-GRUNTS',
+    '14-WIT WITTIE',
+    '15-BANG BANG',
+    '18-COBIA/KABELJAUW',
+    '19-SILVER SNAPPER',
+    '22-RED SNAPPER',
+    '24-DAGOETIFI',
+    '25-CREVALLY JACK',
+    '30-MELKVIS',
+    '32-HERRING',
+    '40-BLUE FISH',
+    '41-SILVER POMFRET',
+    '90-GREEN SNAPPER',
+    '98-BARBAMAN',
+    '100-POES',
+    '101-KOEPILA',
+    'KK-KUMAKUMA',
+    '102-KODOKOE',
+    '180-BLAKKA FREE',
+    '200-POMPIDOE',
+    '300-SPARI',
+    '724-PORGY',
+    'GARN-GARNALEN',
+    'INK-INKVIS',
+    'GLUE-GLUE',
+  ];
+
   const DEFAULT_SETTINGS = {
     defaultCrateWeight: 2.0,
     defaultCrateCount: 20,
     defaultPalletWeight: 25,
     defaultIcePercent: 0,
-    species: ['Kabeljauw', 'Schol', 'Tong', 'Makreel', 'Haring', 'Zalm'],
-    suppliers: [],
+    species: DEFAULT_SPECIES.slice(),
+    suppliers: DEFAULT_SUPPLIERS.slice(),
     sizes: ['1', '2', '3', '4', '5'],
     sheetWebhookUrl: '',
     sheetIncludePhoto: false,
@@ -447,7 +497,6 @@
       if (!p.size) return `${tag}: kies een size.`;
       if (p.temperatureRaw === '' || p.temperature === null) return `${tag}: vul temperatuur in.`;
       if (!p.quality) return `${tag}: kies een kwaliteitsklasse.`;
-      if (!p.photo) return `${tag}: voeg een foto toe.`;
       if (p.netWeight <= 0) return `${tag}: nettogewicht moet groter dan 0 zijn.`;
     }
     return null;
@@ -584,7 +633,9 @@
       `).join('')}
       <div class="detail-actions">
         <button class="btn danger" id="deleteReceiptBtn">Verwijderen</button>
-        <button class="btn secondary" id="closeDetailFootBtn" style="margin-left:auto">Sluiten</button>
+        <button class="btn primary" id="shareWhatsAppBtn" style="margin-left:auto">Bon via WhatsApp</button>
+        <button class="btn primary" id="printBonBtn">Bon als PDF</button>
+        <button class="btn secondary" id="closeDetailFootBtn">Sluiten</button>
       </div>
     `;
     $('#detailModal').classList.remove('hidden');
@@ -600,7 +651,139 @@
       renderHistory();
       toast('Verwijderd', 'success');
     });
+    $('#printBonBtn').addEventListener('click', () => printBon(receipt));
+    $('#shareWhatsAppBtn').addEventListener('click', () => shareBonWhatsApp(receipt));
     $('#closeDetailFootBtn').addEventListener('click', closeDetail);
+  }
+
+  function buildBonText(receipt) {
+    const totalCrates = receipt.pallets.reduce((s, p) => s + (Number(p.crateCount) || 0), 0);
+    const totalNet = receipt.pallets.reduce((s, p) => s + (Number(p.netWeight) || 0), 0);
+
+    const lines = [];
+    lines.push('*N.V. HOLSU — AFLEVERBON*');
+    lines.push('');
+    lines.push(`Bonnr: ${receipt.deliveryNumber || receipt.id || ''}`);
+    lines.push(`Datum: ${fmtDateTime(receipt.dateTime)}`);
+    lines.push(`Leverancier: ${receipt.supplier || ''}`);
+    lines.push(`Pallets: ${receipt.pallets.length}`);
+    lines.push('');
+
+    receipt.pallets.forEach((p, i) => {
+      lines.push(`*Pallet ${i + 1}* — ${p.species || ''}${p.size ? ' (size ' + p.size + ')' : ''} [${p.quality || ''}]`);
+      lines.push(`  Bakken: ${p.crateCount ?? '-'} | Netto: ${fmtNum(p.netWeight ?? 0)} kg | Temp: ${p.temperature !== null && p.temperature !== undefined ? fmtNum(p.temperature, 1) + '°C' : '-'}`);
+      if (p.notes) lines.push(`  Opm: ${p.notes}`);
+    });
+
+    lines.push('');
+    lines.push(`*Totaal:* ${totalCrates} bakken — *${fmtNum(totalNet)} kg netto*`);
+
+    return lines.join('\n');
+  }
+
+  function shareBonWhatsApp(receipt) {
+    const text = buildBonText(receipt);
+    const title = `Aflever bon ${receipt.supplier || ''} ${receipt.deliveryNumber || ''}`.trim();
+
+    if (navigator.share) {
+      navigator.share({ text, title }).catch(err => {
+        if (err && err.name === 'AbortError') return;
+        window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+      });
+    } else {
+      window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+    }
+  }
+
+  function printBon(receipt) {
+    const totalCrates = receipt.pallets.reduce((s, p) => s + (Number(p.crateCount) || 0), 0);
+    const totalNet = receipt.pallets.reduce((s, p) => s + (Number(p.netWeight) || 0), 0);
+
+    const rows = receipt.pallets.map((p, i) => `
+      <tr>
+        <td class="num">${i + 1}</td>
+        <td>${escapeHtml(p.species || '')}</td>
+        <td>${escapeHtml(p.size || '')}</td>
+        <td>${escapeHtml(p.quality || '')}</td>
+        <td class="num">${p.crateCount ?? ''}</td>
+        <td class="num">${fmtNum(p.netWeight ?? 0)}</td>
+        <td class="num">${p.temperature !== null && p.temperature !== undefined ? fmtNum(p.temperature, 1) : ''}</td>
+      </tr>
+    `).join('');
+
+    const notes = receipt.pallets
+      .map((p, i) => p.notes ? `<div><strong>Pallet ${i + 1}:</strong> ${escapeHtml(p.notes)}</div>` : '')
+      .filter(Boolean)
+      .join('');
+
+    const bonNr = (receipt.deliveryNumber || receipt.id || '').toString();
+    const printedAt = new Date().toLocaleString('nl-NL');
+
+    $('#printArea').innerHTML = `
+      <div class="bon-header">
+        <img src="logo.png" alt="N.V. HOLSU" onerror="this.style.display='none'">
+        <div class="bon-title">
+          <h1>AFLEVERBON</h1>
+          <div class="sub">Bonnr: <strong>${escapeHtml(bonNr)}</strong></div>
+          <div class="sub">Afdruk: ${escapeHtml(printedAt)}</div>
+        </div>
+      </div>
+
+      <div class="bon-meta">
+        <div><span class="label">Datum/tijd ontvangst:</span> <strong>${escapeHtml(fmtDateTime(receipt.dateTime))}</strong></div>
+        <div><span class="label">Leverancier / Leveringsnr:</span> <strong>${escapeHtml(receipt.supplier || '')}${receipt.supplier && receipt.deliveryNumber ? ' — ' : ''}${escapeHtml(receipt.deliveryNumber || '')}</strong></div>
+      </div>
+
+      <table class="bon-table">
+        <thead>
+          <tr>
+            <th class="num">Pallet</th>
+            <th>Vissoort</th>
+            <th>Size</th>
+            <th>Kwaliteit</th>
+            <th class="num">Bakken</th>
+            <th class="num">Netto vis (kg)</th>
+            <th class="num">Temp (°C)</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4">Totaal</td>
+            <td class="num">${totalCrates}</td>
+            <td class="num">${fmtNum(totalNet)}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      ${notes ? `<div class="bon-notes"><strong>Opmerkingen:</strong>${notes}</div>` : ''}
+
+      <div class="bon-signatures one">
+        <div class="sig-box">
+          <div class="sig-label">Ontvangen door (naam + handtekening)</div>
+        </div>
+      </div>
+
+      <div class="bon-footer">
+        N.V. HOLSU &middot; Aflever bon &middot; Gegenereerd door Vis Ontvangst app
+      </div>
+    `;
+
+    const originalTitle = document.title;
+    const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
+    const supplierPart = safe(receipt.supplier);
+    const deliveryPart = safe(receipt.deliveryNumber);
+    const fileName = [supplierPart, deliveryPart].filter(Boolean).join(' ') || 'Aflever bon';
+    document.title = fileName;
+
+    const restore = () => {
+      document.title = originalTitle;
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+
+    setTimeout(() => window.print(), 50);
   }
 
   function closeDetail() {
@@ -834,6 +1017,23 @@
     });
     $('#newSupplier').addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); $('#addSupplierBtn').click(); }
+    });
+
+    $('#importDefaultSuppliersBtn').addEventListener('click', () => {
+      const existing = new Set(settings.suppliers.map(s => s.toLowerCase()));
+      let added = 0;
+      DEFAULT_SUPPLIERS.forEach(s => {
+        if (!existing.has(s.toLowerCase())) {
+          settings.suppliers.push(s);
+          added++;
+        }
+      });
+      settings.suppliers.sort((a, b) => a.localeCompare(b, 'nl'));
+      saveSettings();
+      renderSettings();
+      const currentSupplier = $('#supplier').value;
+      populateSupplierSelect(currentSupplier);
+      toast(added === 0 ? 'Alle standaardleveranciers staan er al in' : added + ' leverancier(s) toegevoegd', 'success');
     });
 
     $('#exportAllBtn').addEventListener('click', () => {
