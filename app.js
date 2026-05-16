@@ -682,9 +682,15 @@
   }
 
   function shareBonWhatsApp(receipt) {
+    shareBonImage(receipt).catch(err => {
+      console.warn('JPG share failed, fallback naar tekst:', err);
+      shareBonText(receipt);
+    });
+  }
+
+  function shareBonText(receipt) {
     const text = buildBonText(receipt);
     const title = `Aflever bon ${receipt.supplier || ''} ${receipt.deliveryNumber || ''}`.trim();
-
     if (navigator.share) {
       navigator.share({ text, title }).catch(err => {
         if (err && err.name === 'AbortError') return;
@@ -695,7 +701,64 @@
     }
   }
 
-  function printBon(receipt) {
+  async function shareBonImage(receipt) {
+    if (typeof html2canvas !== 'function') {
+      throw new Error('html2canvas niet beschikbaar');
+    }
+
+    renderBonInPrintArea(receipt);
+    const area = $('#printArea');
+    area.classList.add('rendering');
+
+    const logoImg = area.querySelector('img');
+    if (logoImg && !logoImg.complete) {
+      await new Promise(res => {
+        logoImg.addEventListener('load', res, { once: true });
+        logoImg.addEventListener('error', res, { once: true });
+      });
+    }
+
+    let blob, fileName;
+    try {
+      const canvas = await html2canvas(area, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+      blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
+      const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
+      fileName = [safe(receipt.supplier), safe(receipt.deliveryNumber)].filter(Boolean).join(' ') || 'Aflever bon';
+      fileName += '.jpg';
+    } finally {
+      area.classList.remove('rendering');
+    }
+
+    if (!blob) throw new Error('Kon JPG niet genereren');
+
+    const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Aflever bon',
+          text: `Aflever bon ${receipt.supplier || ''} ${receipt.deliveryNumber || ''}`.trim(),
+        });
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        throw err;
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('JPG gedownload — deel handmatig via WhatsApp', 'success');
+  }
+
+  function renderBonInPrintArea(receipt) {
     const totalCrates = receipt.pallets.reduce((s, p) => s + (Number(p.crateCount) || 0), 0);
     const totalNet = receipt.pallets.reduce((s, p) => s + (Number(p.netWeight) || 0), 0);
 
@@ -769,6 +832,10 @@
         N.V. HOLSU &middot; Aflever bon &middot; Gegenereerd door Vis Ontvangst app
       </div>
     `;
+  }
+
+  function printBon(receipt) {
+    renderBonInPrintArea(receipt);
 
     const originalTitle = document.title;
     const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();

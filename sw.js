@@ -1,4 +1,4 @@
-const CACHE = 'vis-ontvangst-v10';
+const CACHE = 'vis-ontvangst-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const ASSETS = [
   './manifest.json',
   './icon.svg',
 ];
+const ALLOWED_CDN_HOSTS = ['cdn.jsdelivr.net'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -28,7 +29,7 @@ self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== location.origin) return;
+  if (url.origin !== location.origin && !ALLOWED_CDN_HOSTS.includes(url.hostname)) return;
 
   event.respondWith(
     caches.match(req).then(cached => {
