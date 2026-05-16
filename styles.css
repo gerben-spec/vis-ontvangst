@@ -664,6 +664,10 @@ table.bon-table td {
   text-align: left;
   vertical-align: top;
 }
+table.bon-table th:first-child,
+table.bon-table td:first-child {
+  white-space: nowrap;
+}
 table.bon-table th {
   background: #eee;
   font-weight: 700;
