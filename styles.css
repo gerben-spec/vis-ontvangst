@@ -568,19 +568,56 @@ main {
   margin-left: 0.15rem;
 }
 
-/* ---------- Aflever bon (gedeelde stijlen) ---------- */
+/* ---------- Signature modal ---------- */
+.signature-modal { max-width: 560px; }
+.signature-hint { margin: 0 0 0.5rem; color: var(--text-muted); }
+.signature-wrap {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: white;
+  overflow: hidden;
+}
+.signature-canvas {
+  display: block;
+  width: 100%;
+  height: 220px;
+  touch-action: none;
+  cursor: crosshair;
+}
+.signature-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+.signature-actions .btn { flex: 1 1 30%; min-width: 100px; }
+
+/* Handtekening op de bon zelf */
+.sig-box img.sig-img {
+  display: block;
+  max-height: 100px;
+  max-width: 60%;
+  margin-bottom: 4px;
+}
+
+/* ---------- Ontvangstbon (gedeelde stijlen) ---------- */
 #printArea { display: none; }
 #printArea.rendering {
-  display: block;
+  display: flex;
+  flex-direction: column;
   position: absolute;
   left: -10000px;
   top: 0;
   width: 794px;
+  min-height: 1411px; /* 9:16 ratio (794 * 16/9 ≈ 1411) */
   background: white;
   color: black;
   font-family: Arial, Helvetica, sans-serif;
   padding: 24px;
   box-sizing: border-box;
+}
+#printArea.rendering .bon-signatures {
+  margin-top: auto;
 }
 
 .bon-header {
@@ -592,6 +629,13 @@ main {
   margin-bottom: 14px;
 }
 .bon-header img { max-height: 90px; width: auto; }
+.bon-logo-text {
+  color: #c00;
+  font-size: 26pt;
+  font-weight: 900;
+  letter-spacing: 1px;
+  line-height: 1;
+}
 .bon-header .bon-title { margin-left: auto; text-align: right; }
 .bon-header .bon-title h1 { margin: 0; font-size: 22pt; letter-spacing: 1px; }
 .bon-header .bon-title .sub { font-size: 10pt; color: #444; }

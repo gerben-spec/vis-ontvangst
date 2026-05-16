@@ -651,29 +651,127 @@
       renderHistory();
       toast('Verwijderd', 'success');
     });
-    $('#printBonBtn').addEventListener('click', () => printBon(receipt));
-    $('#shareWhatsAppBtn').addEventListener('click', () => shareBonWhatsApp(receipt));
+    $('#printBonBtn').addEventListener('click', async () => {
+      const sig = await openSignatureModal(receipt);
+      if (sig === 'abort') return;
+      if (sig !== undefined) persistSignature(receipt, sig);
+      printBon(receipt);
+    });
+    $('#shareWhatsAppBtn').addEventListener('click', async () => {
+      const sig = await openSignatureModal(receipt);
+      if (sig === 'abort') return;
+      if (sig !== undefined) persistSignature(receipt, sig);
+      shareBonWhatsApp(receipt);
+    });
     $('#closeDetailFootBtn').addEventListener('click', closeDetail);
   }
 
+  function persistSignature(receipt, signature) {
+    receipt.signature = signature;
+    const all = loadReceipts();
+    const idx = all.findIndex(r => r.id === receipt.id);
+    if (idx !== -1) {
+      all[idx].signature = signature;
+      saveReceipts(all);
+    }
+  }
+
+  let signaturePadInstance = null;
+
+  function openSignatureModal(receipt) {
+    return new Promise(resolve => {
+      const modal = $('#signatureModal');
+      const canvas = $('#signaturePad');
+
+      if (typeof SignaturePad !== 'function') {
+        toast('Handtekening-lib niet geladen, ga online en herlaad', 'error');
+        resolve('abort');
+        return;
+      }
+
+      modal.classList.remove('hidden');
+
+      requestAnimationFrame(() => {
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(ratio, ratio);
+
+        if (signaturePadInstance) signaturePadInstance.off();
+        signaturePadInstance = new SignaturePad(canvas, {
+          backgroundColor: 'rgba(255,255,255,0)',
+          penColor: '#000',
+          minWidth: 1,
+          maxWidth: 2.5,
+        });
+        signaturePadInstance.clear();
+
+        if (receipt.signature) {
+          try { signaturePadInstance.fromDataURL(receipt.signature); } catch (e) { /* ignore */ }
+        }
+      });
+
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        if (signaturePadInstance) {
+          signaturePadInstance.off();
+          signaturePadInstance = null;
+        }
+        $('#clearSignatureBtn').removeEventListener('click', onClear);
+        $('#skipSignatureBtn').removeEventListener('click', onSkip);
+        $('#confirmSignatureBtn').removeEventListener('click', onConfirm);
+        $('#closeSignatureBtn').removeEventListener('click', onClose);
+      };
+
+      const onClear = () => signaturePadInstance && signaturePadInstance.clear();
+      const onSkip = () => { cleanup(); resolve(null); };
+      const onConfirm = () => {
+        if (!signaturePadInstance || signaturePadInstance.isEmpty()) {
+          cleanup();
+          resolve(null);
+          return;
+        }
+        const dataUrl = signaturePadInstance.toDataURL('image/png');
+        cleanup();
+        resolve(dataUrl);
+      };
+      const onClose = () => { cleanup(); resolve('abort'); };
+
+      $('#clearSignatureBtn').addEventListener('click', onClear);
+      $('#skipSignatureBtn').addEventListener('click', onSkip);
+      $('#confirmSignatureBtn').addEventListener('click', onConfirm);
+      $('#closeSignatureBtn').addEventListener('click', onClose);
+    });
+  }
+
   function buildBonText(receipt) {
-    const totalCrates = receipt.pallets.reduce((s, p) => s + (Number(p.crateCount) || 0), 0);
-    const totalNet = receipt.pallets.reduce((s, p) => s + (Number(p.netWeight) || 0), 0);
+    const groups = groupPalletsForBon(receipt.pallets);
+    const totalCrates = groups.reduce((s, g) => s + g.crates, 0);
+    const totalNet = groups.reduce((s, g) => s + g.netWeight, 0);
 
     const lines = [];
-    lines.push('*N.V. HOLSU — AFLEVERBON*');
+    lines.push('*N.V. HOLSU — ONTVANGSTBON*');
     lines.push('');
     lines.push(`Bonnr: ${receipt.deliveryNumber || receipt.id || ''}`);
     lines.push(`Datum: ${fmtDateTime(receipt.dateTime)}`);
     lines.push(`Leverancier: ${receipt.supplier || ''}`);
-    lines.push(`Pallets: ${receipt.pallets.length}`);
     lines.push('');
 
-    receipt.pallets.forEach((p, i) => {
-      lines.push(`*Pallet ${i + 1}* — ${p.species || ''}${p.size ? ' (size ' + p.size + ')' : ''} [${p.quality || ''}]`);
-      lines.push(`  Bakken: ${p.crateCount ?? '-'} | Netto: ${fmtNum(p.netWeight ?? 0)} kg | Temp: ${p.temperature !== null && p.temperature !== undefined ? fmtNum(p.temperature, 1) + '°C' : '-'}`);
-      if (p.notes) lines.push(`  Opm: ${p.notes}`);
+    groups.forEach(g => {
+      lines.push(`*${g.species}*${g.size ? ' (size ' + g.size + ')' : ''} [${g.quality || '-'}]`);
+      lines.push(`  Bakken: ${g.crates} | Netto: ${fmtNum(g.netWeight)} kg${g.tempLabel ? ' | Temp: ' + g.tempLabel + '°C' : ''}`);
     });
+
+    const palletNotes = receipt.pallets
+      .map((p, i) => p.notes ? `  Pallet ${i + 1}: ${p.notes}` : '')
+      .filter(Boolean);
+    if (palletNotes.length) {
+      lines.push('');
+      lines.push('Opmerkingen:');
+      palletNotes.forEach(n => lines.push(n));
+    }
 
     lines.push('');
     lines.push(`*Totaal:* ${totalCrates} bakken — *${fmtNum(totalNet)} kg netto*`);
@@ -690,7 +788,7 @@
 
   function shareBonText(receipt) {
     const text = buildBonText(receipt);
-    const title = `Aflever bon ${receipt.supplier || ''} ${receipt.deliveryNumber || ''}`.trim();
+    const title = `Ontvangstbon ${receipt.supplier || ''} ${receipt.deliveryNumber || ''}`.trim();
     if (navigator.share) {
       navigator.share({ text, title }).catch(err => {
         if (err && err.name === 'AbortError') return;
@@ -723,7 +821,7 @@
       const canvas = await html2canvas(area, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
       blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
       const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
-      fileName = [safe(receipt.supplier), safe(receipt.deliveryNumber)].filter(Boolean).join(' ') || 'Aflever bon';
+      fileName = [safe(receipt.supplier), safe(receipt.deliveryNumber)].filter(Boolean).join(' ') || 'Ontvangstbon';
       fileName += '.jpg';
     } finally {
       area.classList.remove('rendering');
@@ -737,8 +835,8 @@
       try {
         await navigator.share({
           files: [file],
-          title: 'Aflever bon',
-          text: `Aflever bon ${receipt.supplier || ''} ${receipt.deliveryNumber || ''}`.trim(),
+          title: 'Ontvangstbon',
+          text: `Ontvangstbon ${receipt.supplier || ''} ${receipt.deliveryNumber || ''}`.trim(),
         });
         return;
       } catch (err) {
@@ -758,19 +856,61 @@
     toast('JPG gedownload — deel handmatig via WhatsApp', 'success');
   }
 
-  function renderBonInPrintArea(receipt) {
-    const totalCrates = receipt.pallets.reduce((s, p) => s + (Number(p.crateCount) || 0), 0);
-    const totalNet = receipt.pallets.reduce((s, p) => s + (Number(p.netWeight) || 0), 0);
+  function groupPalletsForBon(pallets) {
+    const groups = new Map();
+    pallets.forEach(p => {
+      const key = `${p.species || ''}||${p.size || ''}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          species: p.species || '',
+          size: p.size || '',
+          qualities: new Set(),
+          crates: 0,
+          netWeight: 0,
+          temps: [],
+        });
+      }
+      const g = groups.get(key);
+      if (p.quality) g.qualities.add(p.quality);
+      g.crates += Number(p.crateCount) || 0;
+      g.netWeight += Number(p.netWeight) || 0;
+      if (p.temperature !== null && p.temperature !== undefined && p.temperature !== '') {
+        const t = Number(p.temperature);
+        if (!Number.isNaN(t)) g.temps.push(t);
+      }
+    });
+    return Array.from(groups.values()).map(g => {
+      let tempLabel = '';
+      if (g.temps.length === 1) tempLabel = fmtNum(g.temps[0], 1);
+      else if (g.temps.length > 1) {
+        const min = Math.min(...g.temps);
+        const max = Math.max(...g.temps);
+        tempLabel = min === max ? fmtNum(min, 1) : `${fmtNum(min, 1)}–${fmtNum(max, 1)}`;
+      }
+      return {
+        species: g.species,
+        size: g.size,
+        quality: Array.from(g.qualities).sort().join(', '),
+        crates: g.crates,
+        netWeight: g.netWeight,
+        tempLabel,
+      };
+    }).sort((a, b) => a.species.localeCompare(b.species, 'nl') || a.size.localeCompare(b.size, 'nl'));
+  }
 
-    const rows = receipt.pallets.map((p, i) => `
+  function renderBonInPrintArea(receipt) {
+    const groups = groupPalletsForBon(receipt.pallets);
+    const totalCrates = groups.reduce((s, g) => s + g.crates, 0);
+    const totalNet = groups.reduce((s, g) => s + g.netWeight, 0);
+
+    const rows = groups.map(g => `
       <tr>
-        <td class="num">${i + 1}</td>
-        <td>${escapeHtml(p.species || '')}</td>
-        <td>${escapeHtml(p.size || '')}</td>
-        <td>${escapeHtml(p.quality || '')}</td>
-        <td class="num">${p.crateCount ?? ''}</td>
-        <td class="num">${fmtNum(p.netWeight ?? 0)}</td>
-        <td class="num">${p.temperature !== null && p.temperature !== undefined ? fmtNum(p.temperature, 1) : ''}</td>
+        <td>${escapeHtml(g.species)}</td>
+        <td>${escapeHtml(g.size)}</td>
+        <td>${escapeHtml(g.quality)}</td>
+        <td class="num">${g.crates}</td>
+        <td class="num">${fmtNum(g.netWeight)}</td>
+        <td class="num">${g.tempLabel}</td>
       </tr>
     `).join('');
 
@@ -784,9 +924,11 @@
 
     $('#printArea').innerHTML = `
       <div class="bon-header">
-        <img src="logo.png" alt="N.V. HOLSU" onerror="this.style.display='none'">
+        <div class="bon-logo">
+          <img src="logo.png" alt="N.V. HOLSU" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'bon-logo-text',textContent:'N.V. HOLSU'}))">
+        </div>
         <div class="bon-title">
-          <h1>AFLEVERBON</h1>
+          <h1>ONTVANGSTBON</h1>
           <div class="sub">Bonnr: <strong>${escapeHtml(bonNr)}</strong></div>
           <div class="sub">Afdruk: ${escapeHtml(printedAt)}</div>
         </div>
@@ -800,7 +942,6 @@
       <table class="bon-table">
         <thead>
           <tr>
-            <th class="num">Pallet</th>
             <th>Vissoort</th>
             <th>Size</th>
             <th>Kwaliteit</th>
@@ -812,7 +953,7 @@
         <tbody>${rows}</tbody>
         <tfoot>
           <tr>
-            <td colspan="4">Totaal</td>
+            <td colspan="3">Totaal</td>
             <td class="num">${totalCrates}</td>
             <td class="num">${fmtNum(totalNet)}</td>
             <td></td>
@@ -824,12 +965,13 @@
 
       <div class="bon-signatures one">
         <div class="sig-box">
+          ${receipt.signature ? `<img class="sig-img" src="${receipt.signature}" alt="handtekening">` : ''}
           <div class="sig-label">Ontvangen door (naam + handtekening)</div>
         </div>
       </div>
 
       <div class="bon-footer">
-        N.V. HOLSU &middot; Aflever bon &middot; Gegenereerd door Vis Ontvangst app
+        N.V. HOLSU &middot; Ontvangstbon &middot; Gegenereerd door Vis Ontvangst app
       </div>
     `;
   }
@@ -841,7 +983,7 @@
     const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
     const supplierPart = safe(receipt.supplier);
     const deliveryPart = safe(receipt.deliveryNumber);
-    const fileName = [supplierPart, deliveryPart].filter(Boolean).join(' ') || 'Aflever bon';
+    const fileName = [supplierPart, deliveryPart].filter(Boolean).join(' ') || 'Ontvangstbon';
     document.title = fileName;
 
     const restore = () => {

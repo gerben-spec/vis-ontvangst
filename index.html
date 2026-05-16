@@ -170,6 +170,27 @@
   <img id="photoFull" alt="Pallet foto" />
 </div>
 
+<!-- Signature modal -->
+<div id="signatureModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-content signature-modal">
+    <header>
+      <h2>Handtekening — Ontvangen door</h2>
+      <button class="icon-btn" id="closeSignatureBtn" aria-label="Sluiten">✕</button>
+    </header>
+    <div class="modal-body">
+      <p class="signature-hint">Teken hier met je vinger:</p>
+      <div class="signature-wrap">
+        <canvas id="signaturePad" class="signature-canvas"></canvas>
+      </div>
+      <div class="signature-actions">
+        <button class="btn secondary" id="clearSignatureBtn">Wissen</button>
+        <button class="btn secondary" id="skipSignatureBtn">Overslaan</button>
+        <button class="btn primary" id="confirmSignatureBtn">Bevestigen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="toast" class="toast hidden"></div>
 
@@ -256,6 +277,7 @@
 </template>
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js" crossorigin="anonymous"></script>
 <script src="app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
