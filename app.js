@@ -119,7 +119,7 @@
   }
 
   // ------- Google Sheets sync -------
-  function buildSheetPayload(receipt) {
+  function buildSheetPayload(receipt, startIndex = 1) {
     return {
       receiptId: receipt.id,
       dateTime: receipt.dateTime,
@@ -127,7 +127,7 @@
       deliveryNumber: receipt.deliveryNumber || '',
       createdAt: receipt.createdAt,
       pallets: receipt.pallets.map((p, i) => ({
-        palletIndex: i + 1,
+        palletIndex: startIndex + i,
         species: p.species,
         size: p.size || '',
         quality: p.quality,
@@ -161,14 +161,14 @@
     return data;
   }
 
-  async function trySync(receipt) {
+  async function trySync(receipt, startIndex = 1) {
     if (!settings.sheetWebhookUrl) return { synced: false, reason: 'disabled' };
     try {
-      await postToSheet(buildSheetPayload(receipt));
+      await postToSheet(buildSheetPayload(receipt, startIndex));
       return { synced: true };
     } catch (err) {
       const q = loadQueue();
-      if (!q.find(r => r.id === receipt.id)) q.push(receipt);
+      if (!q.find(r => r.id === receipt.id)) q.push({ ...receipt, _startIndex: startIndex });
       saveQueue(q);
       return { synced: false, reason: err.message };
     }
@@ -182,7 +182,9 @@
     const remaining = [];
     for (const receipt of q) {
       try {
-        await postToSheet(buildSheetPayload(receipt));
+        const startIndex = receipt._startIndex || 1;
+        const { _startIndex, ...cleanReceipt } = receipt;
+        await postToSheet(buildSheetPayload(cleanReceipt, startIndex));
         okCount++;
       } catch {
         remaining.push(receipt);
@@ -521,27 +523,52 @@
       return rest;
     });
 
-    const receipt = {
-      id: 'r' + Date.now().toString(36),
-      dateTime: $('#receiptDateTime').value || nowLocalIso(),
-      supplier: $('#supplier').value,
-      deliveryNumber: $('#deliveryNumber').value.trim(),
-      pallets: cleanedPallets,
-      createdAt: new Date().toISOString(),
-    };
+    const supplier = $('#supplier').value;
+    const deliveryNumber = $('#deliveryNumber').value.trim();
+    const dateTime = $('#receiptDateTime').value || nowLocalIso();
 
     const receipts = loadReceipts();
-    receipts.unshift(receipt);
+    const matchKey = (s, d) => `${(s || '').trim().toLowerCase()}||${(d || '').trim().toLowerCase()}`;
+    const targetKey = matchKey(supplier, deliveryNumber);
+    const existingIdx = receipts.findIndex(r => matchKey(r.supplier, r.deliveryNumber) === targetKey);
+
+    let receipt, isMerge, startIndex;
+    if (existingIdx >= 0) {
+      const existing = receipts[existingIdx];
+      startIndex = (existing.pallets ? existing.pallets.length : 0) + 1;
+      existing.pallets = (existing.pallets || []).concat(cleanedPallets);
+      existing.lastUpdatedAt = new Date().toISOString();
+      receipts.splice(existingIdx, 1);
+      receipts.unshift(existing);
+      receipt = existing;
+      isMerge = true;
+    } else {
+      receipt = {
+        id: 'r' + Date.now().toString(36),
+        dateTime,
+        supplier,
+        deliveryNumber,
+        pallets: cleanedPallets,
+        createdAt: new Date().toISOString(),
+      };
+      receipts.unshift(receipt);
+      startIndex = 1;
+      isMerge = false;
+    }
     saveReceipts(receipts);
 
+    const syncReceipt = isMerge
+      ? { ...receipt, pallets: cleanedPallets }
+      : receipt;
+
     if (settings.sheetWebhookUrl) {
-      toast('Opslaan + synchroniseren...', 'success');
-      trySync(receipt).then(res => {
-        if (res.synced) toast('Opgeslagen & in Google Sheet gezet', 'success');
+      toast(isMerge ? `${cleanedPallets.length} pallet(s) toegevoegd — sync...` : 'Opslaan + synchroniseren...', 'success');
+      trySync(syncReceipt, startIndex).then(res => {
+        if (res.synced) toast(isMerge ? 'Pallets toegevoegd & in Google Sheet gezet' : 'Opgeslagen & in Google Sheet gezet', 'success');
         else toast('Opgeslagen — in wachtrij voor sync', 'error');
       });
     } else {
-      toast('Ontvangst opgeslagen', 'success');
+      toast(isMerge ? `${cleanedPallets.length} pallet(s) toegevoegd aan bestaande levering` : 'Ontvangst opgeslagen', 'success');
     }
     resetForm();
   }

@@ -628,24 +628,24 @@ main {
   padding-bottom: 8px;
   margin-bottom: 14px;
 }
-.bon-header img { max-height: 90px; width: auto; }
+.bon-header img { max-height: 160px; width: auto; }
 .bon-logo-text {
   color: #c00;
-  font-size: 26pt;
+  font-size: 52pt;
   font-weight: 900;
   letter-spacing: 1px;
   line-height: 1;
 }
 .bon-header .bon-title { margin-left: auto; text-align: right; }
-.bon-header .bon-title h1 { margin: 0; font-size: 22pt; letter-spacing: 1px; }
-.bon-header .bon-title .sub { font-size: 10pt; color: #444; }
+.bon-header .bon-title h1 { margin: 0; font-size: 44pt; letter-spacing: 1px; }
+.bon-header .bon-title .sub { font-size: 20pt; color: #444; }
 
 .bon-meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px 24px;
-  font-size: 11pt;
-  margin-bottom: 12px;
+  gap: 8px 24px;
+  font-size: 22pt;
+  margin-bottom: 18px;
 }
 .bon-meta .label { color: #555; }
 .bon-meta strong { font-weight: 700; }
@@ -653,13 +653,13 @@ main {
 table.bon-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 10pt;
-  margin-bottom: 12px;
+  font-size: 20pt;
+  margin-bottom: 18px;
 }
 table.bon-table th,
 table.bon-table td {
   border: 1px solid #333;
-  padding: 4px 6px;
+  padding: 8px 10px;
   text-align: left;
   vertical-align: top;
 }
@@ -675,34 +675,34 @@ table.bon-table tfoot td {
 }
 
 .bon-notes {
-  font-size: 10pt;
-  margin: 6px 0 14px;
+  font-size: 20pt;
+  margin: 10px 0 20px;
 }
 
 .bon-signatures {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 30px;
-  margin-top: 28px;
-  font-size: 10pt;
+  margin-top: 32px;
+  font-size: 20pt;
 }
 .bon-signatures.one {
   grid-template-columns: 1fr;
 }
 .bon-signatures .sig-box {
   border-top: 1px solid black;
-  padding-top: 6px;
-  min-height: 60px;
+  padding-top: 10px;
+  min-height: 100px;
 }
-.bon-signatures .sig-label { color: #555; font-size: 9pt; }
+.bon-signatures .sig-label { color: #555; font-size: 18pt; }
 
 .bon-footer {
-  margin-top: 24px;
-  font-size: 8pt;
+  margin-top: 28px;
+  font-size: 16pt;
   color: #555;
   text-align: center;
   border-top: 1px solid #aaa;
-  padding-top: 6px;
+  padding-top: 10px;
 }
 
 @media print {
