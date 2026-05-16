@@ -956,13 +956,13 @@
         </div>
         <div class="bon-title">
           <h1>ONTVANGSTBON</h1>
+          <div class="sub bon-datetime"><strong>${escapeHtml(fmtDateTime(receipt.dateTime))}</strong></div>
           <div class="sub">Bonnr: <strong>${escapeHtml(bonNr)}</strong></div>
           <div class="sub">Afdruk: ${escapeHtml(printedAt)}</div>
         </div>
       </div>
 
       <div class="bon-meta">
-        <div><span class="label">Datum/tijd ontvangst:</span> <strong>${escapeHtml(fmtDateTime(receipt.dateTime))}</strong></div>
         <div><span class="label">Leverancier / Leveringsnr:</span> <strong>${escapeHtml(receipt.supplier || '')}${receipt.supplier && receipt.deliveryNumber ? ' — ' : ''}${escapeHtml(receipt.deliveryNumber || '')}</strong></div>
       </div>
 

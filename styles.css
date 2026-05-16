@@ -628,17 +628,18 @@ main {
   padding-bottom: 8px;
   margin-bottom: 14px;
 }
-.bon-header img { max-height: 160px; width: auto; }
+.bon-header img { max-height: 110px; width: auto; }
 .bon-logo-text {
   color: #c00;
-  font-size: 52pt;
+  font-size: 36pt;
   font-weight: 900;
   letter-spacing: 1px;
   line-height: 1;
 }
 .bon-header .bon-title { margin-left: auto; text-align: right; }
-.bon-header .bon-title h1 { margin: 0; font-size: 44pt; letter-spacing: 1px; }
-.bon-header .bon-title .sub { font-size: 20pt; color: #444; }
+.bon-header .bon-title h1 { margin: 0 0 6px; font-size: 24pt; letter-spacing: 1px; }
+.bon-header .bon-title .sub { font-size: 18pt; color: #444; }
+.bon-header .bon-title .bon-datetime { color: #111; font-size: 20pt; margin-bottom: 4px; }
 
 .bon-meta {
   display: grid;
