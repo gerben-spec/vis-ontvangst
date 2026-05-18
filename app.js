@@ -289,6 +289,12 @@
     return Number(n).toFixed(decimals).replace('.', ',');
   }
 
+  // Voor de bon: rond af op gehele getallen (exacte berekening blijft intern, alleen weergave is afgerond).
+  function fmtBon(n) {
+    if (n === null || n === undefined || isNaN(n)) return '0';
+    return String(Math.round(Number(n)));
+  }
+
   function corrSign(c) {
     // legacy corrections without kind are treated as deductions (subtract)
     return c && c.kind === 'addition' ? 1 : -1;
@@ -1393,7 +1399,7 @@
         <td>${escapeHtml(g.size)}</td>
         <td>${escapeHtml(g.quality)}</td>
         <td class="num">${g.crates}</td>
-        <td class="num">${fmtNum(g.netWeight)}</td>
+        <td class="num">${fmtBon(g.netWeight)}</td>
         <td class="num">${g.tempLabel}</td>
       </tr>
     `).join('');
@@ -1464,7 +1470,7 @@
               <td>${escapeHtml(c.species || '')}</td>
               <td>${escapeHtml(c.size || '')}</td>
               <td class="num">${crates ? pfx + crates : ''}</td>
-              <td class="num">${pfx}${fmtNum(c.netWeight)}</td>
+              <td class="num">${pfx}${fmtBon(c.netWeight)}</td>
             </tr>
           `;}).join('')}
         </tbody>
@@ -1472,7 +1478,7 @@
           <tr>
             <td colspan="3">Totaal correcties</td>
             <td class="num">${corrTotalCrates !== 0 ? sgn(corrTotalCrates) + Math.abs(corrTotalCrates) : '0'}</td>
-            <td class="num">${corrTotalKg !== 0 ? sgn(corrTotalKg) + fmtNum(Math.abs(corrTotalKg)) : '0,00'}</td>
+            <td class="num">${corrTotalKg !== 0 ? sgn(corrTotalKg) + fmtBon(Math.abs(corrTotalKg)) : '0'}</td>
           </tr>
         </tfoot>
       </table>
@@ -1514,7 +1520,7 @@
           <tr>
             <td colspan="3">${corrections.length ? 'Subtotaal pallets' : 'Totaal'}</td>
             <td class="num">${totalCrates}</td>
-            <td class="num">${fmtNum(palletsKg)}</td>
+            <td class="num">${fmtBon(palletsKg)}</td>
             <td></td>
           </tr>
         </tfoot>
@@ -1525,7 +1531,7 @@
       ${corrections.length ? `
         <div class="bon-final-total">
           <span>NETTO TOTAAL:</span>
-          <strong>${finalCrates} bakken &middot; ${fmtNum(totalNet)} kg</strong>
+          <strong>${finalCrates} bakken &middot; ${fmtBon(totalNet)} kg</strong>
         </div>
       ` : ''}
 
