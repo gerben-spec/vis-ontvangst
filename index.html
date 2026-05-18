@@ -42,7 +42,7 @@
         </label>
         <label class="field">
           <span>Leveringsnummer <em class="req">*</em></span>
-          <input type="text" id="deliveryNumber" placeholder="bv. 2026-0142" />
+          <input type="text" id="deliveryNumber" inputmode="numeric" pattern="[0-9]*" placeholder="bv. 142" />
         </label>
       </div>
     </div>
@@ -260,6 +260,36 @@
         <button type="button" class="quality-btn" data-q="D">D</button>
       </div>
     </div>
+
+    <details class="vangst-section">
+      <summary>Vangstgegevens (optioneel)</summary>
+      <div class="grid">
+        <label class="field">
+          <span>Bootnaam</span>
+          <input type="text" class="boatName" placeholder="bv. Jochem" />
+        </label>
+        <label class="field">
+          <span>Losplaats</span>
+          <input type="text" class="unloadLocation" placeholder="bv. VCC" />
+        </label>
+        <label class="field">
+          <span>Registratie Nr</span>
+          <input type="text" class="registrationNr" placeholder="bv. SK 05207" />
+        </label>
+        <label class="field">
+          <span>Licence Nr</span>
+          <input type="text" class="licenceNr" placeholder="bv. BKF 146" />
+        </label>
+        <label class="field">
+          <span>Vertrekdatum vangst</span>
+          <input type="date" class="departureDate" />
+        </label>
+        <label class="field">
+          <span>Aankomstdatum vangst</span>
+          <input type="date" class="arrivalDate" />
+        </label>
+      </div>
+    </details>
 
     <label class="field">
       <span>Foto pallet + weegschaal (optioneel)</span>

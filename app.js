@@ -142,6 +142,12 @@
         temperature: p.temperature,
         notes: p.notes || '',
         photo: settings.sheetIncludePhoto ? (p.photo || '') : '',
+        boatName: p.boatName || '',
+        unloadLocation: p.unloadLocation || '',
+        registrationNr: p.registrationNr || '',
+        licenceNr: p.licenceNr || '',
+        departureDate: p.departureDate || '',
+        arrivalDate: p.arrivalDate || '',
       })),
     };
   }
@@ -208,6 +214,22 @@
     return Number(n).toFixed(decimals).replace('.', ',');
   }
 
+  function correctionTotals(receipt) {
+    const list = (receipt && receipt.corrections) || [];
+    return list.reduce((acc, c) => ({
+      crates: acc.crates + (Number(c.crateCount) || 0),
+      kg: acc.kg + (Number(c.netWeight) || 0),
+    }), { crates: 0, kg: 0 });
+  }
+
+  function palletsNet(receipt) {
+    return (receipt.pallets || []).reduce((s, p) => s + (Number(p.netWeight) || 0), 0);
+  }
+
+  function netAfterCorrections(receipt) {
+    return palletsNet(receipt) - correctionTotals(receipt).kg;
+  }
+
   function nowLocalIso() {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -221,6 +243,18 @@
     return d.toLocaleString('nl-NL', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    // yyyy-mm-dd → dd-mm-yyyy (avoid timezone shifts)
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('nl-NL', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
     });
   }
 
@@ -347,6 +381,12 @@
     iceInput.value = preset?.icePercent ?? settings.defaultIcePercent;
     tempInput.value = preset?.temperature ?? '';
     notesInput.value = preset?.notes ?? '';
+    $('.boatName', node).value = preset?.boatName ?? '';
+    $('.unloadLocation', node).value = preset?.unloadLocation ?? '';
+    $('.registrationNr', node).value = preset?.registrationNr ?? '';
+    $('.licenceNr', node).value = preset?.licenceNr ?? '';
+    $('.departureDate', node).value = preset?.departureDate ?? '';
+    $('.arrivalDate', node).value = preset?.arrivalDate ?? '';
 
     populateSpeciesSelect(speciesSelect, preset?.species);
     populateSizeSelect($('.size', node), preset?.size);
@@ -471,6 +511,12 @@
       icePercentRaw: $('.icePercent', n).value,
       notes: $('.notes', n).value.trim(),
       photo: p.state.photo,
+      boatName: $('.boatName', n).value.trim(),
+      unloadLocation: $('.unloadLocation', n).value.trim(),
+      registrationNr: $('.registrationNr', n).value.trim(),
+      licenceNr: $('.licenceNr', n).value.trim(),
+      departureDate: $('.departureDate', n).value,
+      arrivalDate: $('.arrivalDate', n).value,
     };
   }
 
@@ -604,7 +650,8 @@
 
     list.innerHTML = '';
     receipts.forEach(r => {
-      const totalNet = r.pallets.reduce((s, p) => s + (p.netWeight || 0), 0);
+      const totalNet = netAfterCorrections(r);
+      const corr = correctionTotals(r);
       const speciesList = Array.from(new Set(r.pallets.map(p => p.species))).join(', ');
       const item = document.createElement('div');
       item.className = 'history-item';
@@ -615,7 +662,7 @@
         </div>
         <div class="totals">
           <strong>${fmtNum(totalNet)} kg</strong>
-          ${r.pallets.length} pallet${r.pallets.length === 1 ? '' : 's'}
+          ${r.pallets.length} pallet${r.pallets.length === 1 ? '' : 's'}${corr.kg > 0 ? ` • <span class="corr-tag">−${fmtNum(corr.kg)} kg corr.</span>` : ''}
         </div>
       `;
       item.addEventListener('click', () => openDetail(r.id));
@@ -632,16 +679,31 @@
   function openDetail(id) {
     const receipt = loadReceipts().find(r => r.id === id);
     if (!receipt) return;
-    const totalNet = receipt.pallets.reduce((s, p) => s + (p.netWeight || 0), 0);
+    const palletsTotal = palletsNet(receipt);
+    const corr = correctionTotals(receipt);
+    const totalNet = palletsTotal - corr.kg;
+    const corrections = receipt.corrections || [];
     $('#detailTitle').textContent = 'Ontvangst — ' + fmtDateTime(receipt.dateTime);
     const body = $('#detailBody');
+
+    const speciesOptions = ['<option value="">Kies vissoort...</option>']
+      .concat((settings.species || []).map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`))
+      .join('');
+    const sizeOptions = ['<option value="">Kies size...</option>']
+      .concat((settings.sizes || []).map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`))
+      .join('');
+
     body.innerHTML = `
       <div style="margin-bottom:1rem">
         ${receipt.supplier ? `<div><span style="color:var(--text-muted)">Leverancier:</span> <strong>${escapeHtml(receipt.supplier)}</strong></div>` : ''}
         ${receipt.deliveryNumber ? `<div><span style="color:var(--text-muted)">Leveringsnummer:</span> <strong>${escapeHtml(receipt.deliveryNumber)}</strong></div>` : ''}
-        <div><span style="color:var(--text-muted)">Totaal netto:</span> <strong>${fmtNum(totalNet)} kg</strong> (${receipt.pallets.length} pallets)</div>
+        <div><span style="color:var(--text-muted)">Pallets netto:</span> <strong>${fmtNum(palletsTotal)} kg</strong> (${receipt.pallets.length} pallets)</div>
+        ${corr.kg > 0 ? `<div><span style="color:var(--text-muted)">Correcties:</span> <strong style="color:#c00">−${fmtNum(corr.kg)} kg</strong></div>` : ''}
+        <div><span style="color:var(--text-muted)">Netto totaal:</span> <strong>${fmtNum(totalNet)} kg</strong></div>
       </div>
-      ${receipt.pallets.map((p, i) => `
+      ${receipt.pallets.map((p, i) => {
+        const hasVangst = p.boatName || p.unloadLocation || p.registrationNr || p.licenceNr || p.departureDate || p.arrivalDate;
+        return `
         <div class="detail-pallet">
           <h4>Pallet ${i + 1} — ${escapeHtml(p.species)}${p.size ? ' (size ' + escapeHtml(p.size) + ')' : ''} <span class="quality-badge ${p.quality}">${p.quality}</span></h4>
           <div class="detail-grid">
@@ -654,10 +716,81 @@
             <div><span>Netto vis</span><strong>${fmtNum(p.netWeight)} kg</strong></div>
             <div><span>Temperatuur</span><strong>${p.temperature !== null && p.temperature !== undefined ? fmtNum(p.temperature, 1) + ' °C' : '—'}</strong></div>
           </div>
+          ${hasVangst ? `
+            <div class="detail-vangst">
+              <h5>Vangstgegevens</h5>
+              <div class="detail-grid">
+                ${p.boatName ? `<div><span>Bootnaam</span><strong>${escapeHtml(p.boatName)}</strong></div>` : ''}
+                ${p.unloadLocation ? `<div><span>Losplaats</span><strong>${escapeHtml(p.unloadLocation)}</strong></div>` : ''}
+                ${p.registrationNr ? `<div><span>Registratie Nr</span><strong>${escapeHtml(p.registrationNr)}</strong></div>` : ''}
+                ${p.licenceNr ? `<div><span>Licence Nr</span><strong>${escapeHtml(p.licenceNr)}</strong></div>` : ''}
+                ${p.departureDate ? `<div><span>Vertrek vangst</span><strong>${escapeHtml(fmtDate(p.departureDate))}</strong></div>` : ''}
+                ${p.arrivalDate ? `<div><span>Aankomst vangst</span><strong>${escapeHtml(fmtDate(p.arrivalDate))}</strong></div>` : ''}
+              </div>
+            </div>
+          ` : ''}
           ${p.notes ? `<div style="margin-top:.5rem;font-size:.9rem"><span style="color:var(--text-muted)">Notitie:</span> ${escapeHtml(p.notes)}</div>` : ''}
           ${p.photo ? `<img class="detail-photo" src="${p.photo}" alt="Pallet foto" data-full="1">` : ''}
         </div>
-      `).join('')}
+      `;}).join('')}
+
+      <div class="corrections-section">
+        <h3>Correcties${corrections.length ? ` (${corrections.length})` : ''}</h3>
+        ${corrections.length === 0 ? '<p style="color:var(--text-muted);margin:.5rem 0">Geen correcties.</p>' : ''}
+        ${corrections.map(c => `
+          <div class="correction-item" data-cid="${c.id}">
+            <div>
+              <strong>${escapeHtml(c.reason || 'Correctie')}</strong> —
+              ${escapeHtml(c.species || '')}${c.size ? ' (size ' + escapeHtml(c.size) + ')' : ''}
+              <span style="color:#c00">−${fmtNum(c.netWeight)} kg</span>${c.crateCount ? ` • ${c.crateCount} bak(ken)` : ''}
+              ${c.notes ? `<div style="font-size:.85rem;color:var(--text-muted)">${escapeHtml(c.notes)}</div>` : ''}
+            </div>
+            <button class="icon-btn delete-correction" aria-label="Verwijder correctie" data-cid="${c.id}">🗑</button>
+          </div>
+        `).join('')}
+        <button class="btn secondary" id="toggleCorrectionFormBtn" type="button">+ Correctie toevoegen</button>
+        <div id="correctionForm" class="correction-form hidden">
+          <div class="row">
+            <label class="field grow">
+              <span>Vissoort</span>
+              <select id="corrSpecies">${speciesOptions}</select>
+            </label>
+            <label class="field">
+              <span>Size</span>
+              <select id="corrSize">${sizeOptions}</select>
+            </label>
+          </div>
+          <label class="field">
+            <span>Reden</span>
+            <input type="text" id="corrReason" list="corrReasonList" placeholder="bv. bedorven, weeg-correctie" />
+            <datalist id="corrReasonList">
+              <option value="Bedorven"></option>
+              <option value="Weeg-correctie"></option>
+              <option value="Beschadigde verpakking"></option>
+              <option value="Verkeerd ingevoerd"></option>
+            </datalist>
+          </label>
+          <div class="row">
+            <label class="field">
+              <span>Aantal bakken (optioneel)</span>
+              <input type="number" id="corrCrates" min="0" step="1" inputmode="numeric" />
+            </label>
+            <label class="field grow">
+              <span>Kg af te trekken <em class="req">*</em></span>
+              <input type="number" id="corrKg" min="0" step="0.01" inputmode="decimal" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Notitie (optioneel)</span>
+            <textarea id="corrNotes" rows="2" placeholder="Toelichting..."></textarea>
+          </label>
+          <div class="row" style="margin-top:.5rem">
+            <button class="btn secondary" id="cancelCorrectionBtn" type="button">Annuleren</button>
+            <button class="btn primary" id="saveCorrectionBtn" type="button" style="margin-left:auto">Correctie opslaan</button>
+          </div>
+        </div>
+      </div>
+
       <div class="detail-actions">
         <button class="btn danger" id="deleteReceiptBtn">Verwijderen</button>
         <button class="btn primary" id="shareWhatsAppBtn" style="margin-left:auto">Bon via WhatsApp</button>
@@ -691,6 +824,113 @@
       shareBonWhatsApp(receipt);
     });
     $('#closeDetailFootBtn').addEventListener('click', closeDetail);
+
+    // Correction form
+    const toggleBtn = $('#toggleCorrectionFormBtn');
+    const form = $('#correctionForm');
+    if (toggleBtn && form) {
+      toggleBtn.addEventListener('click', () => {
+        form.classList.toggle('hidden');
+        if (!form.classList.contains('hidden')) {
+          $('#corrSpecies').focus();
+        }
+      });
+      $('#cancelCorrectionBtn').addEventListener('click', () => {
+        form.classList.add('hidden');
+        $('#corrSpecies').value = '';
+        $('#corrSize').value = '';
+        $('#corrReason').value = '';
+        $('#corrCrates').value = '';
+        $('#corrKg').value = '';
+        $('#corrNotes').value = '';
+      });
+      $('#saveCorrectionBtn').addEventListener('click', () => addCorrection(id));
+    }
+    body.querySelectorAll('.delete-correction').forEach(btn => {
+      btn.addEventListener('click', () => deleteCorrection(id, btn.dataset.cid));
+    });
+  }
+
+  function addCorrection(receiptId) {
+    const species = $('#corrSpecies').value;
+    const size = $('#corrSize').value;
+    const reason = $('#corrReason').value.trim();
+    const crateCount = Number($('#corrCrates').value) || 0;
+    const netWeight = Number($('#corrKg').value);
+    const notes = $('#corrNotes').value.trim();
+
+    if (!species) { toast('Kies een vissoort', 'error'); return; }
+    if (!reason) { toast('Vul een reden in', 'error'); return; }
+    if (!netWeight || netWeight <= 0) { toast('Vul kg af te trekken in (> 0)', 'error'); return; }
+
+    const all = loadReceipts();
+    const idx = all.findIndex(r => r.id === receiptId);
+    if (idx === -1) return;
+    if (!all[idx].corrections) all[idx].corrections = [];
+    const correction = {
+      id: 'c' + Date.now().toString(36),
+      species, size, reason, crateCount, netWeight, notes,
+      createdAt: new Date().toISOString(),
+    };
+    all[idx].corrections.push(correction);
+    saveReceipts(all);
+
+    if (settings.sheetWebhookUrl) {
+      syncCorrection(all[idx], correction).then(res => {
+        toast(res.synced ? 'Correctie opgeslagen & in Sheet gezet' : 'Correctie opgeslagen — sync mislukt', res.synced ? 'success' : 'error');
+      });
+    } else {
+      toast('Correctie opgeslagen', 'success');
+    }
+    openDetail(receiptId);
+    renderHistory();
+  }
+
+  function deleteCorrection(receiptId, correctionId) {
+    if (!confirm('Deze correctie verwijderen?\n\nLet op: een eerder gesynchroniseerde regel in Google Sheets blijft staan; verwijder die handmatig indien nodig.')) return;
+    const all = loadReceipts();
+    const idx = all.findIndex(r => r.id === receiptId);
+    if (idx === -1) return;
+    all[idx].corrections = (all[idx].corrections || []).filter(c => c.id !== correctionId);
+    saveReceipts(all);
+    toast('Correctie verwijderd', 'success');
+    openDetail(receiptId);
+    renderHistory();
+  }
+
+  async function syncCorrection(receipt, correction) {
+    if (!settings.sheetWebhookUrl) return { synced: false, reason: 'disabled' };
+    const idxLabel = 'C' + (receipt.corrections || []).findIndex(c => c.id === correction.id) + 1;
+    const payload = {
+      receiptId: receipt.id,
+      dateTime: receipt.dateTime,
+      supplier: receipt.supplier || '',
+      deliveryNumber: receipt.deliveryNumber || '',
+      createdAt: receipt.createdAt,
+      pallets: [{
+        palletIndex: idxLabel,
+        species: correction.species,
+        size: correction.size || '',
+        quality: 'CORRECTIE',
+        crateCount: -(Number(correction.crateCount) || 0),
+        crateWeight: 0,
+        palletWeight: 0,
+        grossWeight: 0,
+        netGross: 0,
+        icePercent: 0,
+        iceDeduction: 0,
+        netWeight: -(Number(correction.netWeight) || 0),
+        temperature: '',
+        notes: correction.reason + (correction.notes ? ' — ' + correction.notes : ''),
+        photo: '',
+      }],
+    };
+    try {
+      await postToSheet(payload);
+      return { synced: true };
+    } catch (err) {
+      return { synced: false, reason: err.message };
+    }
   }
 
   function persistSignature(receipt, signature) {
@@ -928,7 +1168,12 @@
   function renderBonInPrintArea(receipt) {
     const groups = groupPalletsForBon(receipt.pallets);
     const totalCrates = groups.reduce((s, g) => s + g.crates, 0);
-    const totalNet = groups.reduce((s, g) => s + g.netWeight, 0);
+    const palletsKg = groups.reduce((s, g) => s + g.netWeight, 0);
+    const corrections = receipt.corrections || [];
+    const corrTotalKg = corrections.reduce((s, c) => s + (Number(c.netWeight) || 0), 0);
+    const corrTotalCrates = corrections.reduce((s, c) => s + (Number(c.crateCount) || 0), 0);
+    const totalNet = palletsKg - corrTotalKg;
+    const finalCrates = totalCrates - corrTotalCrates;
 
     const rows = groups.map(g => `
       <tr>
@@ -940,6 +1185,39 @@
         <td class="num">${g.tempLabel}</td>
       </tr>
     `).join('');
+
+    const correctionsBlock = corrections.length ? `
+      <h3 class="bon-section-title">Correcties</h3>
+      <table class="bon-table bon-corr-table">
+        <thead>
+          <tr>
+            <th>Reden</th>
+            <th>Vissoort</th>
+            <th>Size</th>
+            <th class="num">Bakken</th>
+            <th class="num">Kg</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${corrections.map(c => `
+            <tr class="corr-row">
+              <td>${escapeHtml(c.reason || '')}</td>
+              <td>${escapeHtml(c.species || '')}</td>
+              <td>${escapeHtml(c.size || '')}</td>
+              <td class="num">−${Number(c.crateCount) || 0}</td>
+              <td class="num">−${fmtNum(c.netWeight)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Totaal correcties</td>
+            <td class="num">−${corrTotalCrates}</td>
+            <td class="num">−${fmtNum(corrTotalKg)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    ` : '';
 
     const notes = receipt.pallets
       .map((p, i) => p.notes ? `<div><strong>Pallet ${i + 1}:</strong> ${escapeHtml(p.notes)}</div>` : '')
@@ -980,13 +1258,22 @@
         <tbody>${rows}</tbody>
         <tfoot>
           <tr>
-            <td colspan="3">Totaal</td>
+            <td colspan="3">${corrections.length ? 'Subtotaal pallets' : 'Totaal'}</td>
             <td class="num">${totalCrates}</td>
-            <td class="num">${fmtNum(totalNet)}</td>
+            <td class="num">${fmtNum(palletsKg)}</td>
             <td></td>
           </tr>
         </tfoot>
       </table>
+
+      ${correctionsBlock}
+
+      ${corrections.length ? `
+        <div class="bon-final-total">
+          <span>NETTO TOTAAL:</span>
+          <strong>${finalCrates} bakken &middot; ${fmtNum(totalNet)} kg</strong>
+        </div>
+      ` : ''}
 
       ${notes ? `<div class="bon-notes"><strong>Opmerkingen:</strong>${notes}</div>` : ''}
 
@@ -1143,6 +1430,10 @@
     $$('.tab').forEach(t => t.addEventListener('click', () => setView(t.dataset.view)));
     $('#addPalletBtn').addEventListener('click', () => addPallet());
     $('#saveReceiptBtn').addEventListener('click', saveCurrentReceipt);
+    $('#deliveryNumber').addEventListener('input', e => {
+      const cleaned = e.target.value.replace(/\D+/g, '');
+      if (cleaned !== e.target.value) e.target.value = cleaned;
+    });
     $('#closeDetailBtn').addEventListener('click', closeDetail);
     $('#closePhotoBtn').addEventListener('click', closePhoto);
     $('#detailModal').addEventListener('click', e => {
