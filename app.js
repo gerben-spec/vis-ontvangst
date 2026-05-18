@@ -63,6 +63,10 @@
     defaultCrateCount: 20,
     defaultPalletWeight: 25,
     defaultIcePercent: 0,
+    defaultBoatName: '',
+    defaultUnloadLocation: '',
+    defaultRegistrationNr: '',
+    defaultLicenceNr: '',
     species: DEFAULT_SPECIES.slice(),
     suppliers: DEFAULT_SUPPLIERS.slice(),
     sizes: ['1', '2', '3', '4', '5'],
@@ -214,12 +218,20 @@
     return Number(n).toFixed(decimals).replace('.', ',');
   }
 
+  function corrSign(c) {
+    // legacy corrections without kind are treated as deductions (subtract)
+    return c && c.kind === 'addition' ? 1 : -1;
+  }
+
   function correctionTotals(receipt) {
     const list = (receipt && receipt.corrections) || [];
-    return list.reduce((acc, c) => ({
-      crates: acc.crates + (Number(c.crateCount) || 0),
-      kg: acc.kg + (Number(c.netWeight) || 0),
-    }), { crates: 0, kg: 0 });
+    return list.reduce((acc, c) => {
+      const sign = corrSign(c);
+      return {
+        crates: acc.crates + sign * (Number(c.crateCount) || 0),
+        kg: acc.kg + sign * (Number(c.netWeight) || 0),
+      };
+    }, { crates: 0, kg: 0 });
   }
 
   function palletsNet(receipt) {
@@ -227,7 +239,8 @@
   }
 
   function netAfterCorrections(receipt) {
-    return palletsNet(receipt) - correctionTotals(receipt).kg;
+    // correctionTotals.kg is signed (negative = deduction, positive = addition)
+    return palletsNet(receipt) + correctionTotals(receipt).kg;
   }
 
   function nowLocalIso() {
@@ -381,10 +394,10 @@
     iceInput.value = preset?.icePercent ?? settings.defaultIcePercent;
     tempInput.value = preset?.temperature ?? '';
     notesInput.value = preset?.notes ?? '';
-    $('.boatName', node).value = preset?.boatName ?? '';
-    $('.unloadLocation', node).value = preset?.unloadLocation ?? '';
-    $('.registrationNr', node).value = preset?.registrationNr ?? '';
-    $('.licenceNr', node).value = preset?.licenceNr ?? '';
+    $('.boatName', node).value = preset?.boatName ?? settings.defaultBoatName ?? '';
+    $('.unloadLocation', node).value = preset?.unloadLocation ?? settings.defaultUnloadLocation ?? '';
+    $('.registrationNr', node).value = preset?.registrationNr ?? settings.defaultRegistrationNr ?? '';
+    $('.licenceNr', node).value = preset?.licenceNr ?? settings.defaultLicenceNr ?? '';
     $('.departureDate', node).value = preset?.departureDate ?? '';
     $('.arrivalDate', node).value = preset?.arrivalDate ?? '';
 
@@ -662,7 +675,7 @@
         </div>
         <div class="totals">
           <strong>${fmtNum(totalNet)} kg</strong>
-          ${r.pallets.length} pallet${r.pallets.length === 1 ? '' : 's'}${corr.kg > 0 ? ` • <span class="corr-tag">−${fmtNum(corr.kg)} kg corr.</span>` : ''}
+          ${r.pallets.length} pallet${r.pallets.length === 1 ? '' : 's'}${corr.kg !== 0 ? ` • <span class="corr-tag ${corr.kg > 0 ? 'corr-add' : ''}">${corr.kg > 0 ? '+' : '−'}${fmtNum(Math.abs(corr.kg))} kg corr.</span>` : ''}
         </div>
       `;
       item.addEventListener('click', () => openDetail(r.id));
@@ -681,7 +694,7 @@
     if (!receipt) return;
     const palletsTotal = palletsNet(receipt);
     const corr = correctionTotals(receipt);
-    const totalNet = palletsTotal - corr.kg;
+    const totalNet = palletsTotal + corr.kg;
     const corrections = receipt.corrections || [];
     $('#detailTitle').textContent = 'Ontvangst — ' + fmtDateTime(receipt.dateTime);
     const body = $('#detailBody');
@@ -698,7 +711,7 @@
         ${receipt.supplier ? `<div><span style="color:var(--text-muted)">Leverancier:</span> <strong>${escapeHtml(receipt.supplier)}</strong></div>` : ''}
         ${receipt.deliveryNumber ? `<div><span style="color:var(--text-muted)">Leveringsnummer:</span> <strong>${escapeHtml(receipt.deliveryNumber)}</strong></div>` : ''}
         <div><span style="color:var(--text-muted)">Pallets netto:</span> <strong>${fmtNum(palletsTotal)} kg</strong> (${receipt.pallets.length} pallets)</div>
-        ${corr.kg > 0 ? `<div><span style="color:var(--text-muted)">Correcties:</span> <strong style="color:#c00">−${fmtNum(corr.kg)} kg</strong></div>` : ''}
+        ${corr.kg !== 0 ? `<div><span style="color:var(--text-muted)">Correcties:</span> <strong style="color:${corr.kg > 0 ? '#0a7a2f' : '#c00'}">${corr.kg > 0 ? '+' : '−'}${fmtNum(Math.abs(corr.kg))} kg</strong></div>` : ''}
         <div><span style="color:var(--text-muted)">Netto totaal:</span> <strong>${fmtNum(totalNet)} kg</strong></div>
       </div>
       ${receipt.pallets.map((p, i) => {
@@ -737,17 +750,21 @@
       <div class="corrections-section">
         <h3>Correcties${corrections.length ? ` (${corrections.length})` : ''}</h3>
         ${corrections.length === 0 ? '<p style="color:var(--text-muted);margin:.5rem 0">Geen correcties.</p>' : ''}
-        ${corrections.map(c => `
+        ${corrections.map(c => {
+          const sign = corrSign(c);
+          const prefix = sign > 0 ? '+' : '−';
+          const color = sign > 0 ? '#0a7a2f' : '#c00';
+          return `
           <div class="correction-item" data-cid="${c.id}">
             <div>
               <strong>${escapeHtml(c.reason || 'Correctie')}</strong> —
               ${escapeHtml(c.species || '')}${c.size ? ' (size ' + escapeHtml(c.size) + ')' : ''}
-              <span style="color:#c00">−${fmtNum(c.netWeight)} kg</span>${c.crateCount ? ` • ${c.crateCount} bak(ken)` : ''}
+              <span style="color:${color}">${prefix}${fmtNum(c.netWeight)} kg</span>${c.crateCount ? ` • ${prefix}${c.crateCount} bak(ken)` : ''}
               ${c.notes ? `<div style="font-size:.85rem;color:var(--text-muted)">${escapeHtml(c.notes)}</div>` : ''}
             </div>
             <button class="icon-btn delete-correction" aria-label="Verwijder correctie" data-cid="${c.id}">🗑</button>
           </div>
-        `).join('')}
+        `;}).join('')}
         <button class="btn secondary" id="toggleCorrectionFormBtn" type="button">+ Correctie toevoegen</button>
         <div id="correctionForm" class="correction-form hidden">
           <div class="row">
@@ -770,13 +787,20 @@
               <option value="Verkeerd ingevoerd"></option>
             </datalist>
           </label>
+          <label class="field">
+            <span>Type correctie</span>
+            <select id="corrKind">
+              <option value="deduction">Aftrek (− eraf)</option>
+              <option value="addition">Toename (+ erbij)</option>
+            </select>
+          </label>
           <div class="row">
             <label class="field">
               <span>Aantal bakken (optioneel)</span>
               <input type="number" id="corrCrates" min="0" step="1" inputmode="numeric" />
             </label>
             <label class="field grow">
-              <span>Kg af te trekken <em class="req">*</em></span>
+              <span>Kg correctie <em class="req">*</em></span>
               <input type="number" id="corrKg" min="0" step="0.01" inputmode="decimal" />
             </label>
           </div>
@@ -840,6 +864,7 @@
         $('#corrSpecies').value = '';
         $('#corrSize').value = '';
         $('#corrReason').value = '';
+        $('#corrKind').value = 'deduction';
         $('#corrCrates').value = '';
         $('#corrKg').value = '';
         $('#corrNotes').value = '';
@@ -855,13 +880,14 @@
     const species = $('#corrSpecies').value;
     const size = $('#corrSize').value;
     const reason = $('#corrReason').value.trim();
+    const kind = $('#corrKind').value === 'addition' ? 'addition' : 'deduction';
     const crateCount = Number($('#corrCrates').value) || 0;
     const netWeight = Number($('#corrKg').value);
     const notes = $('#corrNotes').value.trim();
 
     if (!species) { toast('Kies een vissoort', 'error'); return; }
     if (!reason) { toast('Vul een reden in', 'error'); return; }
-    if (!netWeight || netWeight <= 0) { toast('Vul kg af te trekken in (> 0)', 'error'); return; }
+    if (!netWeight || netWeight <= 0) { toast('Vul kg correctie in (> 0)', 'error'); return; }
 
     const all = loadReceipts();
     const idx = all.findIndex(r => r.id === receiptId);
@@ -869,7 +895,7 @@
     if (!all[idx].corrections) all[idx].corrections = [];
     const correction = {
       id: 'c' + Date.now().toString(36),
-      species, size, reason, crateCount, netWeight, notes,
+      species, size, reason, kind, crateCount, netWeight, notes,
       createdAt: new Date().toISOString(),
     };
     all[idx].corrections.push(correction);
@@ -901,6 +927,7 @@
   async function syncCorrection(receipt, correction) {
     if (!settings.sheetWebhookUrl) return { synced: false, reason: 'disabled' };
     const idxLabel = 'C' + (receipt.corrections || []).findIndex(c => c.id === correction.id) + 1;
+    const sign = corrSign(correction);
     const payload = {
       receiptId: receipt.id,
       dateTime: receipt.dateTime,
@@ -912,16 +939,16 @@
         species: correction.species,
         size: correction.size || '',
         quality: 'CORRECTIE',
-        crateCount: -(Number(correction.crateCount) || 0),
+        crateCount: sign * (Number(correction.crateCount) || 0),
         crateWeight: 0,
         palletWeight: 0,
         grossWeight: 0,
         netGross: 0,
         icePercent: 0,
         iceDeduction: 0,
-        netWeight: -(Number(correction.netWeight) || 0),
+        netWeight: sign * (Number(correction.netWeight) || 0),
         temperature: '',
-        notes: correction.reason + (correction.notes ? ' — ' + correction.notes : ''),
+        notes: (sign > 0 ? 'TOENAME: ' : '') + correction.reason + (correction.notes ? ' — ' + correction.notes : ''),
         photo: '',
       }],
     };
@@ -1170,10 +1197,12 @@
     const totalCrates = groups.reduce((s, g) => s + g.crates, 0);
     const palletsKg = groups.reduce((s, g) => s + g.netWeight, 0);
     const corrections = receipt.corrections || [];
-    const corrTotalKg = corrections.reduce((s, c) => s + (Number(c.netWeight) || 0), 0);
-    const corrTotalCrates = corrections.reduce((s, c) => s + (Number(c.crateCount) || 0), 0);
-    const totalNet = palletsKg - corrTotalKg;
-    const finalCrates = totalCrates - corrTotalCrates;
+    // signed totals: positive = addition, negative = deduction
+    const corrTotalKg = corrections.reduce((s, c) => s + corrSign(c) * (Number(c.netWeight) || 0), 0);
+    const corrTotalCrates = corrections.reduce((s, c) => s + corrSign(c) * (Number(c.crateCount) || 0), 0);
+    const totalNet = palletsKg + corrTotalKg;
+    const finalCrates = totalCrates + corrTotalCrates;
+    const sgn = (n) => n > 0 ? '+' : (n < 0 ? '−' : '');
 
     const rows = groups.map(g => `
       <tr>
@@ -1185,6 +1214,48 @@
         <td class="num">${g.tempLabel}</td>
       </tr>
     `).join('');
+
+    // Vangstgegevens: collect unique sets across pallets
+    const vangstKey = (p) => [
+      p.boatName || '', p.unloadLocation || '', p.registrationNr || '',
+      p.licenceNr || '', p.departureDate || '', p.arrivalDate || ''
+    ].join('|');
+    const hasVangst = (p) => !!(p.boatName || p.unloadLocation || p.registrationNr || p.licenceNr || p.departureDate || p.arrivalDate);
+    const uniqueVangst = [];
+    const seenVangst = new Set();
+    receipt.pallets.forEach((p, idx) => {
+      if (!hasVangst(p)) return;
+      const k = vangstKey(p);
+      if (seenVangst.has(k)) {
+        const ex = uniqueVangst.find(v => v.key === k);
+        if (ex) ex.palletIdx.push(idx + 1);
+        return;
+      }
+      seenVangst.add(k);
+      uniqueVangst.push({ key: k, p, palletIdx: [idx + 1] });
+    });
+    const showVangstPerPallet = uniqueVangst.length > 1;
+    const vangstRow = (p) => {
+      const parts = [];
+      if (p.boatName) parts.push(`<span><span class="lbl">Bootnaam:</span> <strong>${escapeHtml(p.boatName)}</strong></span>`);
+      if (p.unloadLocation) parts.push(`<span><span class="lbl">Losplaats:</span> <strong>${escapeHtml(p.unloadLocation)}</strong></span>`);
+      if (p.registrationNr) parts.push(`<span><span class="lbl">Registratie:</span> <strong>${escapeHtml(p.registrationNr)}</strong></span>`);
+      if (p.licenceNr) parts.push(`<span><span class="lbl">Licence:</span> <strong>${escapeHtml(p.licenceNr)}</strong></span>`);
+      if (p.departureDate) parts.push(`<span><span class="lbl">Vertrek:</span> <strong>${escapeHtml(fmtDate(p.departureDate))}</strong></span>`);
+      if (p.arrivalDate) parts.push(`<span><span class="lbl">Aankomst:</span> <strong>${escapeHtml(fmtDate(p.arrivalDate))}</strong></span>`);
+      return parts.join('');
+    };
+    const vangstBlock = uniqueVangst.length ? `
+      <h3 class="bon-section-title">Vangstgegevens</h3>
+      <div class="bon-vangst">
+        ${uniqueVangst.map(v => `
+          <div class="bon-vangst-item">
+            ${showVangstPerPallet ? `<div class="bon-vangst-label">Pallet ${v.palletIdx.join(', ')}</div>` : ''}
+            <div class="bon-vangst-fields">${vangstRow(v.p)}</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '';
 
     const correctionsBlock = corrections.length ? `
       <h3 class="bon-section-title">Correcties</h3>
@@ -1199,21 +1270,26 @@
           </tr>
         </thead>
         <tbody>
-          ${corrections.map(c => `
-            <tr class="corr-row">
+          ${corrections.map(c => {
+            const s = corrSign(c);
+            const pfx = s > 0 ? '+' : '−';
+            const cls = s > 0 ? 'corr-row corr-row-add' : 'corr-row';
+            const crates = Number(c.crateCount) || 0;
+            return `
+            <tr class="${cls}">
               <td>${escapeHtml(c.reason || '')}</td>
               <td>${escapeHtml(c.species || '')}</td>
               <td>${escapeHtml(c.size || '')}</td>
-              <td class="num">−${Number(c.crateCount) || 0}</td>
-              <td class="num">−${fmtNum(c.netWeight)}</td>
+              <td class="num">${crates ? pfx + crates : ''}</td>
+              <td class="num">${pfx}${fmtNum(c.netWeight)}</td>
             </tr>
-          `).join('')}
+          `;}).join('')}
         </tbody>
         <tfoot>
           <tr>
             <td colspan="3">Totaal correcties</td>
-            <td class="num">−${corrTotalCrates}</td>
-            <td class="num">−${fmtNum(corrTotalKg)}</td>
+            <td class="num">${corrTotalCrates !== 0 ? sgn(corrTotalCrates) + Math.abs(corrTotalCrates) : '0'}</td>
+            <td class="num">${corrTotalKg !== 0 ? sgn(corrTotalKg) + fmtNum(Math.abs(corrTotalKg)) : '0,00'}</td>
           </tr>
         </tfoot>
       </table>
@@ -1224,9 +1300,6 @@
       .filter(Boolean)
       .join('');
 
-    const bonNr = (receipt.deliveryNumber || receipt.id || '').toString();
-    const printedAt = new Date().toLocaleString('nl-NL');
-
     $('#printArea').innerHTML = `
       <div class="bon-header">
         <div class="bon-logo">
@@ -1235,13 +1308,11 @@
         <div class="bon-title">
           <h1>ONTVANGSTBON</h1>
           <div class="sub bon-datetime"><strong>${escapeHtml(fmtDateTime(receipt.dateTime))}</strong></div>
-          <div class="sub">Bonnr: <strong>${escapeHtml(bonNr)}</strong></div>
-          <div class="sub">Afdruk: ${escapeHtml(printedAt)}</div>
         </div>
       </div>
 
       <div class="bon-meta">
-        <div><span class="label">Leverancier / Leveringsnr:</span> <strong>${escapeHtml(receipt.supplier || '')}${receipt.supplier && receipt.deliveryNumber ? ' — ' : ''}${escapeHtml(receipt.deliveryNumber || '')}</strong></div>
+        <div><span class="label">Leverancier:</span> <strong>${escapeHtml(receipt.supplier || '')}${receipt.supplier && receipt.deliveryNumber ? ' — ' : ''}${receipt.deliveryNumber ? '#' + escapeHtml(receipt.deliveryNumber) : ''}</strong></div>
       </div>
 
       <table class="bon-table">
@@ -1275,17 +1346,15 @@
         </div>
       ` : ''}
 
+      ${vangstBlock}
+
       ${notes ? `<div class="bon-notes"><strong>Opmerkingen:</strong>${notes}</div>` : ''}
 
       <div class="bon-signatures one">
         <div class="sig-box">
           ${receipt.signature ? `<img class="sig-img" src="${receipt.signature}" alt="handtekening">` : ''}
-          <div class="sig-label">Ontvangen door (naam + handtekening)</div>
+          <div class="sig-label">Handtekening</div>
         </div>
-      </div>
-
-      <div class="bon-footer">
-        N.V. HOLSU &middot; Ontvangstbon &middot; Gegenereerd door Vis Ontvangst app
       </div>
     `;
   }
@@ -1328,6 +1397,10 @@
     $('#defaultCrateCount').value = settings.defaultCrateCount;
     $('#defaultPalletWeight').value = settings.defaultPalletWeight;
     $('#defaultIcePercent').value = settings.defaultIcePercent;
+    $('#defaultBoatName').value = settings.defaultBoatName || '';
+    $('#defaultUnloadLocation').value = settings.defaultUnloadLocation || '';
+    $('#defaultRegistrationNr').value = settings.defaultRegistrationNr || '';
+    $('#defaultLicenceNr').value = settings.defaultLicenceNr || '';
     $('#sheetWebhookUrl').value = settings.sheetWebhookUrl || '';
     $('#sheetIncludePhoto').checked = !!settings.sheetIncludePhoto;
     updateSyncBadge();
@@ -1462,6 +1535,22 @@
       if (v < 0) v = 0;
       if (v > 100) v = 100;
       settings.defaultIcePercent = v;
+      saveSettings();
+    });
+    $('#defaultBoatName').addEventListener('input', e => {
+      settings.defaultBoatName = e.target.value.trim();
+      saveSettings();
+    });
+    $('#defaultUnloadLocation').addEventListener('input', e => {
+      settings.defaultUnloadLocation = e.target.value.trim();
+      saveSettings();
+    });
+    $('#defaultRegistrationNr').addEventListener('input', e => {
+      settings.defaultRegistrationNr = e.target.value.trim();
+      saveSettings();
+    });
+    $('#defaultLicenceNr').addEventListener('input', e => {
+      settings.defaultLicenceNr = e.target.value.trim();
       saveSettings();
     });
     $('#sheetWebhookUrl').addEventListener('input', e => {

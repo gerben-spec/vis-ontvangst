@@ -645,9 +645,10 @@ main {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px 24px;
-  font-size: 22pt;
+  font-size: 18pt;
   margin-bottom: 18px;
 }
+.bon-meta > div { white-space: nowrap; }
 .bon-meta .label { color: #555; }
 .bon-meta strong { font-weight: 700; }
 
@@ -690,7 +691,8 @@ table.bon-table tfoot td {
 }
 
 .bon-corr-table .corr-row td { color: #c00; }
-.bon-corr-table tfoot td { color: #c00; }
+.bon-corr-table .corr-row-add td { color: #0a7a2f; }
+.bon-corr-table tfoot td { color: #333; font-weight: 700; }
 
 .bon-final-total {
   display: flex;
@@ -702,6 +704,32 @@ table.bon-table tfoot td {
   border-bottom: 3px double #000;
   padding: 10px 8px;
   margin: 14px 0 8px;
+}
+
+.bon-vangst {
+  font-size: 14pt;
+  margin: 8px 0 10px;
+}
+.bon-vangst-item {
+  border: 1px solid #999;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.bon-vangst-label {
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-size: 13pt;
+}
+.bon-vangst-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.bon-vangst-fields .lbl {
+  color: #555;
+  font-weight: 400;
 }
 
 .vangst-section {
@@ -757,6 +785,7 @@ table.bon-table tfoot td {
   font-size: .85rem;
   margin-left: .25rem;
 }
+.corr-tag.corr-add { color: #0a7a2f; }
 
 .bon-signatures {
   display: grid;
