@@ -1299,7 +1299,9 @@
         return;
       } catch (err) {
         if (err && err.name === 'AbortError') return;
-        throw err;
+        // NotAllowedError / SecurityError / no transient activation / permissions-policy:
+        // val terug op directe download zodat gebruiker altijd het bestand heeft
+        console.warn('navigator.share faalde, val terug op download:', err);
       }
     }
 
