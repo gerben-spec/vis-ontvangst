@@ -58,6 +58,8 @@
     'GLUE-GLUE',
   ];
 
+  const DEFAULT_BOATS = [];
+
   const DEFAULT_SETTINGS = {
     defaultCrateWeight: 2.0,
     defaultCrateCount: 20,
@@ -69,6 +71,7 @@
     defaultLicenceNr: '',
     species: DEFAULT_SPECIES.slice(),
     suppliers: DEFAULT_SUPPLIERS.slice(),
+    boats: DEFAULT_BOATS.slice(),
     sizes: [
       '1', '2', '3', '4', '5',
       '<175', '<200', '<250',
@@ -86,6 +89,8 @@
     ],
     sheetWebhookUrl: '',
     sheetIncludePhoto: false,
+    driveFolderId: '',
+    driveUploadEnabled: false,
   };
 
   // ------- State -------
@@ -114,6 +119,11 @@
         });
       } else {
         merged.sizes = DEFAULT_SETTINGS.sizes.slice();
+      }
+      if (!Array.isArray(merged.boats)) merged.boats = DEFAULT_BOATS.slice();
+      // Backfill: if user already has a defaultBoatName but it's not in boats list, add it
+      if (merged.defaultBoatName && !merged.boats.includes(merged.defaultBoatName)) {
+        merged.boats.push(merged.defaultBoatName);
       }
       return merged;
     } catch {
@@ -391,6 +401,32 @@
     });
   }
 
+  function populateBoatSelect(selectEl, current) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = (settings.boats || []).length === 0
+      ? '— Geen bootnamen (voeg toe bij Instellingen) —'
+      : '— Kies bootnaam —';
+    selectEl.appendChild(placeholder);
+    (settings.boats || []).forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      if (s === current) opt.selected = true;
+      selectEl.appendChild(opt);
+    });
+    // If current is set but not in list, preserve it as a free-form option
+    if (current && !(settings.boats || []).includes(current)) {
+      const opt = document.createElement('option');
+      opt.value = current;
+      opt.textContent = current + ' (onbekend)';
+      opt.selected = true;
+      selectEl.appendChild(opt);
+    }
+  }
+
   // ------- Pallet rendering -------
   function addPallet(preset) {
     const tpl = $('#palletTemplate').content.cloneNode(true);
@@ -418,7 +454,8 @@
     iceInput.value = preset?.icePercent ?? settings.defaultIcePercent;
     tempInput.value = preset?.temperature ?? '';
     notesInput.value = preset?.notes ?? '';
-    $('.boatName', node).value = preset?.boatName ?? settings.defaultBoatName ?? '';
+    const boatVal = preset?.boatName ?? settings.defaultBoatName ?? '';
+    populateBoatSelect($('.boatName', node), boatVal);
     $('.unloadLocation', node).value = preset?.unloadLocation ?? settings.defaultUnloadLocation ?? '';
     $('.registrationNr', node).value = preset?.registrationNr ?? settings.defaultRegistrationNr ?? '';
     $('.licenceNr', node).value = preset?.licenceNr ?? settings.defaultLicenceNr ?? '';
@@ -841,7 +878,8 @@
 
       <div class="detail-actions">
         <button class="btn danger" id="deleteReceiptBtn">Verwijderen</button>
-        <button class="btn primary" id="shareWhatsAppBtn" style="margin-left:auto">Bon via WhatsApp</button>
+        <button class="btn primary" id="uploadDriveBtn" style="margin-left:auto">Bon naar Drive</button>
+        <button class="btn primary" id="shareWhatsAppBtn">Bon via WhatsApp</button>
         <button class="btn primary" id="printBonBtn">Bon als PDF</button>
         <button class="btn secondary" id="closeDetailFootBtn">Sluiten</button>
       </div>
@@ -870,6 +908,34 @@
       if (sig === 'abort') return;
       if (sig !== undefined) persistSignature(receipt, sig);
       shareBonWhatsApp(receipt);
+    });
+    $('#uploadDriveBtn').addEventListener('click', async () => {
+      if (!settings.sheetWebhookUrl) {
+        toast('Vul eerst de webhook URL in (Instellingen)', 'error');
+        return;
+      }
+      if (!settings.driveFolderId) {
+        toast('Vul eerst de Drive map ID in (Instellingen)', 'error');
+        return;
+      }
+      const sig = await openSignatureModal(receipt);
+      if (sig === 'abort') return;
+      if (sig !== undefined) persistSignature(receipt, sig);
+      toast('Bon uploaden naar Drive...', '');
+      try {
+        const blob = await renderBonToBlob(receipt, 'image/png');
+        const url = await uploadBonToDrive(receipt, blob);
+        if (url) {
+          toast('Bon opgeslagen in Drive', 'success');
+          if (confirm('Bon opgeslagen!\n\nKlik OK om te openen in een nieuw tabblad.')) {
+            window.open(url, '_blank');
+          }
+        } else {
+          toast('Geen Drive link ontvangen', 'error');
+        }
+      } catch (err) {
+        toast('Drive upload mislukt: ' + err.message, 'error');
+      }
     });
     $('#closeDetailFootBtn').addEventListener('click', closeDetail);
 
@@ -1117,15 +1183,13 @@
     }
   }
 
-  async function shareBonImage(receipt) {
+  async function renderBonToBlob(receipt, mime, quality) {
     if (typeof html2canvas !== 'function') {
       throw new Error('html2canvas niet beschikbaar');
     }
-
     renderBonInPrintArea(receipt);
     const area = $('#printArea');
     area.classList.add('rendering');
-
     const logoImg = area.querySelector('img');
     if (logoImg && !logoImg.complete) {
       await new Promise(res => {
@@ -1133,19 +1197,61 @@
         logoImg.addEventListener('error', res, { once: true });
       });
     }
-
-    let blob, fileName;
     try {
       const canvas = await html2canvas(area, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
-      blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.92));
-      const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
-      fileName = [safe(receipt.supplier), safe(receipt.deliveryNumber)].filter(Boolean).join(' ') || 'Ontvangstbon';
-      fileName += '.jpg';
+      return await new Promise(res => canvas.toBlob(res, mime || 'image/jpeg', quality ?? 0.92));
     } finally {
       area.classList.remove('rendering');
     }
+  }
 
+  function bonFileNameFor(receipt, ext) {
+    const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
+    const base = [safe(receipt.supplier), safe(receipt.deliveryNumber)].filter(Boolean).join(' ') || 'Ontvangstbon';
+    return base + (ext || '.jpg');
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = () => rej(new Error('Kon blob niet lezen'));
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function uploadBonToDrive(receipt, blob) {
+    if (!settings.sheetWebhookUrl) {
+      throw new Error('Webhook URL niet ingesteld');
+    }
+    if (!settings.driveFolderId) {
+      throw new Error('Drive map ID niet ingesteld');
+    }
+    const dataUrl = await blobToDataUrl(blob);
+    const ext = blob.type === 'image/png' ? '.png' : '.jpg';
+    const filename = bonFileNameFor(receipt, ext);
+    const payload = {
+      driveUpload: true,
+      receiptId: receipt.id,
+      bonFilename: filename,
+      bonImage: dataUrl,
+      driveFolderId: settings.driveFolderId,
+    };
+    const data = await postToSheet(payload);
+    return data && data.driveFileUrl;
+  }
+
+  async function shareBonImage(receipt) {
+    const blob = await renderBonToBlob(receipt, 'image/jpeg', 0.92);
     if (!blob) throw new Error('Kon JPG niet genereren');
+    const fileName = bonFileNameFor(receipt, '.jpg');
+
+    // Auto-upload to Drive in background if enabled
+    if (settings.driveUploadEnabled && settings.driveFolderId && settings.sheetWebhookUrl) {
+      uploadBonToDrive(receipt, blob)
+        .then(url => { if (url) toast('Bon opgeslagen in Drive', 'success'); })
+        .catch(err => toast('Drive upload mislukt: ' + err.message, 'error'));
+    }
 
     const file = new File([blob], fileName, { type: 'image/jpeg' });
 
@@ -1421,21 +1527,26 @@
     $('#defaultCrateCount').value = settings.defaultCrateCount;
     $('#defaultPalletWeight').value = settings.defaultPalletWeight;
     $('#defaultIcePercent').value = settings.defaultIcePercent;
-    $('#defaultBoatName').value = settings.defaultBoatName || '';
+    populateBoatSelect($('#defaultBoatName'), settings.defaultBoatName || '');
     $('#defaultUnloadLocation').value = settings.defaultUnloadLocation || '';
     $('#defaultRegistrationNr').value = settings.defaultRegistrationNr || '';
     $('#defaultLicenceNr').value = settings.defaultLicenceNr || '';
     $('#sheetWebhookUrl').value = settings.sheetWebhookUrl || '';
     $('#sheetIncludePhoto').checked = !!settings.sheetIncludePhoto;
+    $('#driveFolderId').value = settings.driveFolderId || '';
+    $('#driveUploadEnabled').checked = !!settings.driveUploadEnabled;
     updateSyncBadge();
     renderChipList('#speciesList', 'species');
     renderChipList('#suppliersList', 'suppliers');
     renderChipList('#sizesList', 'sizes');
+    renderChipList('#boatsList', 'boats');
     const current = $('#supplier')?.value || '';
     populateSupplierSelect(settings.suppliers.includes(current) ? current : '');
     $$('#pallets .pallet').forEach(node => {
       const sel = $('.size', node);
       if (sel) populateSizeSelect(sel, settings.sizes.includes(sel.value) ? sel.value : '');
+      const bsel = $('.boatName', node);
+      if (bsel) populateBoatSelect(bsel, bsel.value);
     });
   }
 
@@ -1561,7 +1672,7 @@
       settings.defaultIcePercent = v;
       saveSettings();
     });
-    $('#defaultBoatName').addEventListener('input', e => {
+    $('#defaultBoatName').addEventListener('change', e => {
       settings.defaultBoatName = e.target.value.trim();
       saveSettings();
     });
@@ -1583,6 +1694,14 @@
     });
     $('#sheetIncludePhoto').addEventListener('change', e => {
       settings.sheetIncludePhoto = e.target.checked;
+      saveSettings();
+    });
+    $('#driveFolderId').addEventListener('input', e => {
+      settings.driveFolderId = e.target.value.trim();
+      saveSettings();
+    });
+    $('#driveUploadEnabled').addEventListener('change', e => {
+      settings.driveUploadEnabled = e.target.checked;
       saveSettings();
     });
     $('#testWebhookBtn').addEventListener('click', async () => {
@@ -1638,6 +1757,24 @@
     });
     $('#newSize').addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); $('#addSizeBtn').click(); }
+    });
+
+    $('#addBoatBtn').addEventListener('click', () => {
+      const v = $('#newBoat').value.trim();
+      if (!v) return;
+      if (!settings.boats) settings.boats = [];
+      if (settings.boats.some(s => s.toLowerCase() === v.toLowerCase())) {
+        toast('Bestaat al', 'error');
+        return;
+      }
+      settings.boats.push(v);
+      settings.boats.sort((a, b) => a.localeCompare(b, 'nl'));
+      saveSettings();
+      $('#newBoat').value = '';
+      renderSettings();
+    });
+    $('#newBoat').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $('#addBoatBtn').click(); }
     });
 
     $('#addSupplierBtn').addEventListener('click', () => {

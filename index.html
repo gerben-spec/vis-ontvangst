@@ -95,7 +95,7 @@
       </label>
       <label class="field">
         <span>Standaard bootnaam</span>
-        <input type="text" id="defaultBoatName" placeholder="bv. Jochem" />
+        <select id="defaultBoatName"></select>
       </label>
       <label class="field">
         <span>Standaard losplaats</span>
@@ -142,6 +142,15 @@
     </div>
 
     <div class="card">
+      <h2>Bootnamen</h2>
+      <div id="boatsList" class="chips"></div>
+      <div class="row">
+        <input type="text" id="newBoat" placeholder="Nieuwe bootnaam (bv. Jochem)..." />
+        <button class="btn secondary" id="addBoatBtn">Toevoegen</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>Google Sheets sync</h2>
       <label class="field">
         <span>Webhook URL (Apps Script Web App)</span>
@@ -158,6 +167,22 @@
       <p style="font-size:.85rem;color:var(--text-muted);margin:.5rem 0 0">
         Bij elke opgeslagen ontvangst wordt automatisch een rij per pallet toegevoegd aan de Google Sheet.
         Bij geen verbinding worden records in een lokale wachtrij gezet en bij de volgende sync verstuurd.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Google Drive bon upload</h2>
+      <label class="field">
+        <span>Drive map ID</span>
+        <input type="text" id="driveFolderId" placeholder="bv. 1AbCdEfGh..." />
+      </label>
+      <label class="field" style="flex-direction:row;align-items:center;gap:.5rem">
+        <input type="checkbox" id="driveUploadEnabled" style="width:auto;margin:0" />
+        <span style="margin:0">Bon automatisch naar Drive bij WhatsApp delen</span>
+      </label>
+      <p style="font-size:.85rem;color:var(--text-muted);margin:.5rem 0 0">
+        Map ID staat in de URL van de Drive map: <code>drive.google.com/drive/folders/<strong>XXXXX</strong></code>.
+        Gebruikt dezelfde webhook als hierboven. De bon-link wordt automatisch in de Sheet-rij gezet (kolom "Bon link").
       </p>
     </div>
 
@@ -282,7 +307,7 @@
       <div class="grid">
         <label class="field">
           <span>Bootnaam</span>
-          <input type="text" class="boatName" placeholder="bv. Jochem" />
+          <select class="boatName"></select>
         </label>
         <label class="field">
           <span>Losplaats</span>
