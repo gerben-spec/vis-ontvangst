@@ -1,4 +1,4 @@
-const CACHE = 'vis-ontvangst-v36';
+const CACHE = 'vis-ontvangst-v38';
 const ASSETS = [
   './',
   './index.html',

@@ -520,6 +520,38 @@ main {
   background: rgba(0,0,0,0.4) !important;
 }
 
+/* ---------- Bon preview modal ---------- */
+#bonPreviewModal {
+  background: rgba(0,0,0,0.85);
+}
+.bon-preview-body {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 4rem 1rem 2rem;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
+#bonPreviewImg {
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 6px 30px rgba(0,0,0,0.6);
+  display: block;
+}
+.bon-preview-loading {
+  color: white;
+  font-size: 1.1rem;
+  padding: 2rem;
+  text-align: center;
+  align-self: center;
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;

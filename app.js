@@ -107,6 +107,25 @@
     return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
 
+  // Extraheert de pure Drive folder ID uit:
+  //  - "1qVi3RFd...TmbRw"                       (pure ID)
+  //  - "1qVi3RFd...TmbRw?usp=sharing"           (ID met query-rommel)
+  //  - "https://drive.google.com/drive/folders/1qVi3RFd...TmbRw?usp=sharing"
+  //  - "https://drive.google.com/drive/u/0/folders/1qVi3RFd...TmbRw"
+  function cleanDriveFolderId(raw) {
+    if (!raw) return '';
+    let s = String(raw).trim();
+    // pak alles na /folders/ als het een URL is
+    const m = s.match(/\/folders\/([^/?#&]+)/);
+    if (m) s = m[1];
+    // strip query string / fragment / spaties
+    s = s.split('?')[0].split('#')[0].split('&')[0].trim();
+    return s;
+  }
+
+  // Voor sheet-webhook URL: alleen trimmen, geen rommel strippen (URL hoort intact te blijven)
+  // (geen aparte cleaner nodig)
+
   function loadSettings() {
     try {
       const raw = localStorage.getItem(STORAGE_KEYS.settings);
@@ -912,9 +931,9 @@
 
       <div class="detail-actions">
         <button class="btn danger" id="deleteReceiptBtn">Verwijderen</button>
-        <button class="btn primary" id="uploadDriveBtn" style="margin-left:auto">Bon naar Drive</button>
+        <button class="btn secondary" id="previewBonBtn" style="margin-left:auto">Bon bekijken</button>
+        <button class="btn primary" id="uploadDriveBtn">Bon naar Drive</button>
         <button class="btn primary" id="shareWhatsAppBtn">Bon via WhatsApp</button>
-        <button class="btn primary" id="printBonBtn">Bon als PDF</button>
         <button class="btn secondary" id="closeDetailFootBtn">Sluiten</button>
       </div>
     `;
@@ -931,11 +950,9 @@
       renderHistory();
       toast('Verwijderd', 'success');
     });
-    $('#printBonBtn').addEventListener('click', async () => {
-      const sig = await openSignatureModal(receipt);
-      if (sig === 'abort') return;
-      if (sig !== undefined) persistSignature(receipt, sig);
-      printBon(receipt);
+    $('#previewBonBtn').addEventListener('click', () => {
+      // Geen handtekening-prompt — pure inzage. Toont bon zoals 'em nu is opgeslagen.
+      openBonPreview(receipt);
     });
     $('#shareWhatsAppBtn').addEventListener('click', async () => {
       const sig = await openSignatureModal(receipt);
@@ -1525,23 +1542,48 @@
     `;
   }
 
-  function printBon(receipt) {
-    renderBonInPrintArea(receipt);
+  async function openBonPreview(receipt) {
+    const modal = $('#bonPreviewModal');
+    const img = $('#bonPreviewImg');
+    const loading = $('#bonPreviewLoading');
 
-    const originalTitle = document.title;
-    const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
-    const supplierPart = safe(receipt.supplier);
-    const deliveryPart = safe(receipt.deliveryNumber);
-    const fileName = [supplierPart, deliveryPart].filter(Boolean).join(' ') || 'Ontvangstbon';
-    document.title = fileName;
+    // Reset state en toon modal
+    img.classList.add('hidden');
+    img.removeAttribute('src');
+    loading.classList.remove('hidden');
+    loading.textContent = 'Bon wordt gerenderd…';
+    modal.classList.remove('hidden');
 
-    const restore = () => {
-      document.title = originalTitle;
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
+    try {
+      const blob = await renderBonToBlob(receipt, 'image/jpeg', 0.92);
+      if (!blob) throw new Error('Kon bon niet renderen');
+      const url = URL.createObjectURL(blob);
+      img.onload = () => {
+        loading.classList.add('hidden');
+        img.classList.remove('hidden');
+      };
+      img.onerror = () => {
+        loading.textContent = 'Kon preview niet laden';
+      };
+      img.src = url;
+      // revoke wanneer modal sluit
+      img.dataset.objUrl = url;
+    } catch (err) {
+      loading.textContent = 'Renderen mislukt: ' + (err.message || err);
+    }
+  }
 
-    setTimeout(() => window.print(), 50);
+  function closeBonPreview() {
+    const modal = $('#bonPreviewModal');
+    const img = $('#bonPreviewImg');
+    modal.classList.add('hidden');
+    const url = img.dataset.objUrl;
+    if (url) {
+      try { URL.revokeObjectURL(url); } catch (_) {}
+      delete img.dataset.objUrl;
+    }
+    img.removeAttribute('src');
+    img.classList.add('hidden');
   }
 
   function closeDetail() {
@@ -1565,6 +1607,14 @@
     $('#defaultIcePercent').value = settings.defaultIcePercent;
     $('#sheetWebhookUrl').value = settings.sheetWebhookUrl || '';
     $('#sheetIncludePhoto').checked = !!settings.sheetIncludePhoto;
+    // Schoon eventuele oude "vuile" folder-IDs op (bv. met ?usp=sharing)
+    if (settings.driveFolderId) {
+      const cleaned = cleanDriveFolderId(settings.driveFolderId);
+      if (cleaned !== settings.driveFolderId) {
+        settings.driveFolderId = cleaned;
+        saveSettings();
+      }
+    }
     $('#driveFolderId').value = settings.driveFolderId || '';
     $('#driveUploadEnabled').checked = !!settings.driveUploadEnabled;
     updateSyncBadge();
@@ -1685,11 +1735,15 @@
     });
     $('#closeDetailBtn').addEventListener('click', closeDetail);
     $('#closePhotoBtn').addEventListener('click', closePhoto);
+    $('#closeBonPreviewBtn').addEventListener('click', closeBonPreview);
     $('#detailModal').addEventListener('click', e => {
       if (e.target.id === 'detailModal') closeDetail();
     });
     $('#photoModal').addEventListener('click', e => {
       if (e.target.id === 'photoModal') closePhoto();
+    });
+    $('#bonPreviewModal').addEventListener('click', e => {
+      if (e.target.id === 'bonPreviewModal') closeBonPreview();
     });
     $('#historySearch').addEventListener('input', renderHistory);
     $('#exportCsvBtn').addEventListener('click', exportCsv);
@@ -1722,8 +1776,13 @@
       saveSettings();
     });
     $('#driveFolderId').addEventListener('input', e => {
-      settings.driveFolderId = e.target.value.trim();
+      settings.driveFolderId = cleanDriveFolderId(e.target.value);
       saveSettings();
+    });
+    $('#driveFolderId').addEventListener('blur', e => {
+      // toon de opgeschoonde versie in het invoerveld zodra je 'em verlaat
+      const cleaned = cleanDriveFolderId(e.target.value);
+      if (cleaned !== e.target.value) e.target.value = cleaned;
     });
     $('#driveUploadEnabled').addEventListener('change', e => {
       settings.driveUploadEnabled = e.target.checked;
