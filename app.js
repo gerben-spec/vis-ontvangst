@@ -69,7 +69,21 @@
     defaultLicenceNr: '',
     species: DEFAULT_SPECIES.slice(),
     suppliers: DEFAULT_SUPPLIERS.slice(),
-    sizes: ['1', '2', '3', '4', '5'],
+    sizes: [
+      '1', '2', '3', '4', '5',
+      '<175', '<200', '<250',
+      '150>', '150-400',
+      '175>', '175/300',
+      '200+', '200>',
+      '250/450', '250/500',
+      '300/600',
+      '400>', '450/900',
+      '500>', '500/1200',
+      '600>', '600/900',
+      '900/1300',
+      '1200/1800', '1300/1800',
+      '1800>',
+    ],
     sheetWebhookUrl: '',
     sheetIncludePhoto: false,
   };
@@ -91,7 +105,17 @@
       const raw = localStorage.getItem(STORAGE_KEYS.settings);
       if (!raw) return { ...DEFAULT_SETTINGS };
       const parsed = JSON.parse(raw);
-      return { ...DEFAULT_SETTINGS, ...parsed };
+      const merged = { ...DEFAULT_SETTINGS, ...parsed };
+      // Merge in any new default sizes the user is missing (preserves custom additions)
+      if (Array.isArray(merged.sizes)) {
+        const existing = new Set(merged.sizes.map(s => String(s)));
+        DEFAULT_SETTINGS.sizes.forEach(s => {
+          if (!existing.has(String(s))) merged.sizes.push(s);
+        });
+      } else {
+        merged.sizes = DEFAULT_SETTINGS.sizes.slice();
+      }
+      return merged;
     } catch {
       return { ...DEFAULT_SETTINGS };
     }
