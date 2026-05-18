@@ -59,19 +59,21 @@
   ];
 
   const DEFAULT_BOATS = [];
+  const DEFAULT_UNLOAD_LOCATIONS = [];
+  const DEFAULT_REGISTRATIONS = [];
+  const DEFAULT_LICENCES = [];
 
   const DEFAULT_SETTINGS = {
     defaultCrateWeight: 2.0,
     defaultCrateCount: 20,
     defaultPalletWeight: 25,
     defaultIcePercent: 0,
-    defaultBoatName: '',
-    defaultUnloadLocation: '',
-    defaultRegistrationNr: '',
-    defaultLicenceNr: '',
     species: DEFAULT_SPECIES.slice(),
     suppliers: DEFAULT_SUPPLIERS.slice(),
     boats: DEFAULT_BOATS.slice(),
+    unloadLocations: DEFAULT_UNLOAD_LOCATIONS.slice(),
+    registrations: DEFAULT_REGISTRATIONS.slice(),
+    licences: DEFAULT_LICENCES.slice(),
     sizes: [
       '1', '2', '3', '4', '5',
       '<175', '<200', '<250',
@@ -121,10 +123,26 @@
         merged.sizes = DEFAULT_SETTINGS.sizes.slice();
       }
       if (!Array.isArray(merged.boats)) merged.boats = DEFAULT_BOATS.slice();
-      // Backfill: if user already has a defaultBoatName but it's not in boats list, add it
+      if (!Array.isArray(merged.unloadLocations)) merged.unloadLocations = DEFAULT_UNLOAD_LOCATIONS.slice();
+      if (!Array.isArray(merged.registrations)) merged.registrations = DEFAULT_REGISTRATIONS.slice();
+      if (!Array.isArray(merged.licences)) merged.licences = DEFAULT_LICENCES.slice();
+      // Backfill: migrate any legacy default-* values into the corresponding list, then drop the field
       if (merged.defaultBoatName && !merged.boats.includes(merged.defaultBoatName)) {
         merged.boats.push(merged.defaultBoatName);
       }
+      if (merged.defaultUnloadLocation && !merged.unloadLocations.includes(merged.defaultUnloadLocation)) {
+        merged.unloadLocations.push(merged.defaultUnloadLocation);
+      }
+      if (merged.defaultRegistrationNr && !merged.registrations.includes(merged.defaultRegistrationNr)) {
+        merged.registrations.push(merged.defaultRegistrationNr);
+      }
+      if (merged.defaultLicenceNr && !merged.licences.includes(merged.defaultLicenceNr)) {
+        merged.licences.push(merged.defaultLicenceNr);
+      }
+      delete merged.defaultBoatName;
+      delete merged.defaultUnloadLocation;
+      delete merged.defaultRegistrationNr;
+      delete merged.defaultLicenceNr;
       return merged;
     } catch {
       return { ...DEFAULT_SETTINGS };
@@ -401,16 +419,16 @@
     });
   }
 
-  function populateBoatSelect(selectEl, current) {
+  function populateListSelect(selectEl, items, current, emptyMsg, placeholderMsg) {
     if (!selectEl) return;
     selectEl.innerHTML = '';
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = (settings.boats || []).length === 0
-      ? '— Geen bootnamen (voeg toe bij Instellingen) —'
-      : '— Kies bootnaam —';
+    placeholder.textContent = (items || []).length === 0
+      ? (emptyMsg || '— Geen items (voeg toe bij Instellingen) —')
+      : (placeholderMsg || '— Kies —');
     selectEl.appendChild(placeholder);
-    (settings.boats || []).forEach(s => {
+    (items || []).forEach(s => {
       const opt = document.createElement('option');
       opt.value = s;
       opt.textContent = s;
@@ -418,13 +436,30 @@
       selectEl.appendChild(opt);
     });
     // If current is set but not in list, preserve it as a free-form option
-    if (current && !(settings.boats || []).includes(current)) {
+    if (current && !(items || []).includes(current)) {
       const opt = document.createElement('option');
       opt.value = current;
       opt.textContent = current + ' (onbekend)';
       opt.selected = true;
       selectEl.appendChild(opt);
     }
+  }
+
+  function populateBoatSelect(selectEl, current) {
+    populateListSelect(selectEl, settings.boats,
+      current, '— Geen bootnamen (voeg toe bij Instellingen) —', '— Kies bootnaam —');
+  }
+  function populateUnloadLocationSelect(selectEl, current) {
+    populateListSelect(selectEl, settings.unloadLocations,
+      current, '— Geen losplaatsen (voeg toe bij Instellingen) —', '— Kies losplaats —');
+  }
+  function populateRegistrationSelect(selectEl, current) {
+    populateListSelect(selectEl, settings.registrations,
+      current, '— Geen registratie nrs (voeg toe bij Instellingen) —', '— Kies registratie —');
+  }
+  function populateLicenceSelect(selectEl, current) {
+    populateListSelect(selectEl, settings.licences,
+      current, '— Geen licence nrs (voeg toe bij Instellingen) —', '— Kies licence —');
   }
 
   // ------- Pallet rendering -------
@@ -454,11 +489,10 @@
     iceInput.value = preset?.icePercent ?? settings.defaultIcePercent;
     tempInput.value = preset?.temperature ?? '';
     notesInput.value = preset?.notes ?? '';
-    const boatVal = preset?.boatName ?? settings.defaultBoatName ?? '';
-    populateBoatSelect($('.boatName', node), boatVal);
-    $('.unloadLocation', node).value = preset?.unloadLocation ?? settings.defaultUnloadLocation ?? '';
-    $('.registrationNr', node).value = preset?.registrationNr ?? settings.defaultRegistrationNr ?? '';
-    $('.licenceNr', node).value = preset?.licenceNr ?? settings.defaultLicenceNr ?? '';
+    populateBoatSelect($('.boatName', node), preset?.boatName ?? '');
+    populateUnloadLocationSelect($('.unloadLocation', node), preset?.unloadLocation ?? '');
+    populateRegistrationSelect($('.registrationNr', node), preset?.registrationNr ?? '');
+    populateLicenceSelect($('.licenceNr', node), preset?.licenceNr ?? '');
     $('.departureDate', node).value = preset?.departureDate ?? '';
     $('.arrivalDate', node).value = preset?.arrivalDate ?? '';
 
@@ -1527,10 +1561,6 @@
     $('#defaultCrateCount').value = settings.defaultCrateCount;
     $('#defaultPalletWeight').value = settings.defaultPalletWeight;
     $('#defaultIcePercent').value = settings.defaultIcePercent;
-    populateBoatSelect($('#defaultBoatName'), settings.defaultBoatName || '');
-    $('#defaultUnloadLocation').value = settings.defaultUnloadLocation || '';
-    $('#defaultRegistrationNr').value = settings.defaultRegistrationNr || '';
-    $('#defaultLicenceNr').value = settings.defaultLicenceNr || '';
     $('#sheetWebhookUrl').value = settings.sheetWebhookUrl || '';
     $('#sheetIncludePhoto').checked = !!settings.sheetIncludePhoto;
     $('#driveFolderId').value = settings.driveFolderId || '';
@@ -1540,6 +1570,9 @@
     renderChipList('#suppliersList', 'suppliers');
     renderChipList('#sizesList', 'sizes');
     renderChipList('#boatsList', 'boats');
+    renderChipList('#unloadLocationsList', 'unloadLocations');
+    renderChipList('#registrationsList', 'registrations');
+    renderChipList('#licencesList', 'licences');
     const current = $('#supplier')?.value || '';
     populateSupplierSelect(settings.suppliers.includes(current) ? current : '');
     $$('#pallets .pallet').forEach(node => {
@@ -1547,6 +1580,12 @@
       if (sel) populateSizeSelect(sel, settings.sizes.includes(sel.value) ? sel.value : '');
       const bsel = $('.boatName', node);
       if (bsel) populateBoatSelect(bsel, bsel.value);
+      const usel = $('.unloadLocation', node);
+      if (usel) populateUnloadLocationSelect(usel, usel.value);
+      const rsel = $('.registrationNr', node);
+      if (rsel) populateRegistrationSelect(rsel, rsel.value);
+      const lsel = $('.licenceNr', node);
+      if (lsel) populateLicenceSelect(lsel, lsel.value);
     });
   }
 
@@ -1672,22 +1711,6 @@
       settings.defaultIcePercent = v;
       saveSettings();
     });
-    $('#defaultBoatName').addEventListener('change', e => {
-      settings.defaultBoatName = e.target.value.trim();
-      saveSettings();
-    });
-    $('#defaultUnloadLocation').addEventListener('input', e => {
-      settings.defaultUnloadLocation = e.target.value.trim();
-      saveSettings();
-    });
-    $('#defaultRegistrationNr').addEventListener('input', e => {
-      settings.defaultRegistrationNr = e.target.value.trim();
-      saveSettings();
-    });
-    $('#defaultLicenceNr').addEventListener('input', e => {
-      settings.defaultLicenceNr = e.target.value.trim();
-      saveSettings();
-    });
     $('#sheetWebhookUrl').addEventListener('input', e => {
       settings.sheetWebhookUrl = e.target.value.trim();
       saveSettings();
@@ -1776,6 +1799,29 @@
     $('#newBoat').addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); $('#addBoatBtn').click(); }
     });
+
+    function bindListAdd(addBtnSel, inputSel, settingsKey) {
+      $(addBtnSel).addEventListener('click', () => {
+        const v = $(inputSel).value.trim();
+        if (!v) return;
+        if (!settings[settingsKey]) settings[settingsKey] = [];
+        if (settings[settingsKey].some(s => s.toLowerCase() === v.toLowerCase())) {
+          toast('Bestaat al', 'error');
+          return;
+        }
+        settings[settingsKey].push(v);
+        settings[settingsKey].sort((a, b) => a.localeCompare(b, 'nl'));
+        saveSettings();
+        $(inputSel).value = '';
+        renderSettings();
+      });
+      $(inputSel).addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); $(addBtnSel).click(); }
+      });
+    }
+    bindListAdd('#addUnloadLocationBtn', '#newUnloadLocation', 'unloadLocations');
+    bindListAdd('#addRegistrationBtn', '#newRegistration', 'registrations');
+    bindListAdd('#addLicenceBtn', '#newLicence', 'licences');
 
     $('#addSupplierBtn').addEventListener('click', () => {
       const v = $('#newSupplier').value.trim();

@@ -93,22 +93,6 @@
         <span>Standaard ijs percentage (%)</span>
         <input type="number" id="defaultIcePercent" step="0.1" min="0" max="100" />
       </label>
-      <label class="field">
-        <span>Standaard bootnaam</span>
-        <select id="defaultBoatName"></select>
-      </label>
-      <label class="field">
-        <span>Standaard losplaats</span>
-        <input type="text" id="defaultUnloadLocation" placeholder="bv. VCC" />
-      </label>
-      <label class="field">
-        <span>Standaard registratie nr</span>
-        <input type="text" id="defaultRegistrationNr" placeholder="bv. SK 05207" />
-      </label>
-      <label class="field">
-        <span>Standaard licence nr</span>
-        <input type="text" id="defaultLicenceNr" placeholder="bv. BKF 146" />
-      </label>
     </div>
 
     <div class="card">
@@ -147,6 +131,33 @@
       <div class="row">
         <input type="text" id="newBoat" placeholder="Nieuwe bootnaam (bv. Jochem)..." />
         <button class="btn secondary" id="addBoatBtn">Toevoegen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Losplaatsen</h2>
+      <div id="unloadLocationsList" class="chips"></div>
+      <div class="row">
+        <input type="text" id="newUnloadLocation" placeholder="Nieuwe losplaats (bv. VCC)..." />
+        <button class="btn secondary" id="addUnloadLocationBtn">Toevoegen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Registratie nummers</h2>
+      <div id="registrationsList" class="chips"></div>
+      <div class="row">
+        <input type="text" id="newRegistration" placeholder="Nieuw registratie nr (bv. SK 05207)..." />
+        <button class="btn secondary" id="addRegistrationBtn">Toevoegen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Licence nummers</h2>
+      <div id="licencesList" class="chips"></div>
+      <div class="row">
+        <input type="text" id="newLicence" placeholder="Nieuw licence nr (bv. BKF 146)..." />
+        <button class="btn secondary" id="addLicenceBtn">Toevoegen</button>
       </div>
     </div>
 
@@ -311,15 +322,15 @@
         </label>
         <label class="field">
           <span>Losplaats</span>
-          <input type="text" class="unloadLocation" placeholder="bv. VCC" />
+          <select class="unloadLocation"></select>
         </label>
         <label class="field">
           <span>Registratie Nr</span>
-          <input type="text" class="registrationNr" placeholder="bv. SK 05207" />
+          <select class="registrationNr"></select>
         </label>
         <label class="field">
           <span>Licence Nr</span>
-          <input type="text" class="licenceNr" placeholder="bv. BKF 146" />
+          <select class="licenceNr"></select>
         </label>
         <label class="field">
           <span>Vertrekdatum vangst</span>
